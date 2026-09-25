@@ -4,3 +4,5 @@
 
 .metric:last-child strong{font-size:24px}
 @media(max-width:600px){.metric:last-child strong{font-size:19px}}
+
+.top-nav{display:flex;gap:8px;margin-left:auto;margin-right:28px}.top-nav a{color:var(--muted);text-decoration:none;padding:9px 13px;border-radius:8px;font-size:13px;font-weight:600}.top-nav a.selected{background:#1a3540;color:var(--green)}.top-nav a:hover{color:var(--text)}@media(max-width:760px){.top-nav{margin:0 7px;gap:2px}.top-nav a{padding:7px;font-size:11px}.topbar .top-actions{gap:5px}}@media(max-width:560px){.topbar{height:auto;min-height:70px;flex-wrap:wrap;gap:7px;padding-top:7px;padding-bottom:7px}.top-nav{order:3;width:100%;margin:0}.top-nav a{flex:1;text-align:center}.top-actions .upload-button{font-size:10px}}

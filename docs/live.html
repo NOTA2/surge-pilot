@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#09131d">
+  <title>SurgePilot | 장중 대시보드</title>
+  <link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./live.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-icon">S<span>↗</span></span><span>Surge<span class="brand-light">Pilot</span></span></a>
+    <nav class="top-nav" aria-label="화면 선택"><a href="./">과거 검증</a><a class="selected" href="./live.html">장중 대시보드</a></nav>
+    <div class="top-actions"><span class="status-dot" id="live-dot"></span><span id="feed-status">데이터 확인 중</span><label class="upload-button">로컬 보고서 열기<input id="live-file" type="file" accept=".json,application/json"></label></div>
+  </header>
+  <main class="shell live-shell">
+    <section class="live-heading"><div><p class="eyebrow">US MARKET / PAPER SESSION</p><h1>장중 대시보드</h1><p>관측 중인 신호, 가상 포지션, 손익과 데이터 갱신 상태를 확인합니다.</p></div><div class="market-clock"><span>뉴욕 시장 시각</span><strong id="ny-clock">—</strong><small id="market-date">—</small></div></section>
+    <div id="live-demo" class="notice" hidden><strong>합성 장중 예제</strong> · 지금 보이는 호가와 포지션은 실제 시장 데이터가 아닙니다.</div>
+    <div id="stale-warning" class="notice stale" hidden><strong>갱신 지연</strong> · 보고서가 오래되었습니다. 장중 거래 판단에 사용하지 마세요.</div>
+    <section class="live-metrics" aria-label="장중 요약">
+      <article class="metric"><span>총 평가금액</span><strong id="live-equity">—</strong><small id="live-initial">시작 —</small></article>
+      <article class="metric"><span>당일 손익</span><strong id="live-pnl">—</strong><small id="live-return">—</small></article>
+      <article class="metric"><span>열린 포지션</span><strong id="live-open">—</strong><small id="live-positions-value">—</small></article>
+      <article class="metric"><span>마지막 갱신</span><strong id="live-updated">—</strong><small id="live-source">—</small></article>
+    </section>
+    <section class="live-grid">
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">EQUITY</p><h2>실시간 평가금액</h2></div><span class="chip" id="point-count">—</span></div><div class="chart-wrap live-chart"><svg id="live-chart-svg" viewBox="0 0 800 230" role="img" aria-label="장중 평가금액 추이"></svg></div><div class="chart-axis"><span id="live-chart-start">—</span><span id="live-chart-end">—</span></div></article>
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">MONITORING</p><h2>운영 상태</h2></div></div><div class="validation-content" id="live-monitor"></div></article>
+    </section>
+    <section class="panel live-section"><div class="panel-heading"><div><p class="section-kicker">OPEN POSITIONS</p><h2>보유 중인 가상 포지션</h2></div></div><div class="position-grid" id="positions"></div><div class="empty" id="positions-empty" hidden>현재 보유 중인 포지션이 없습니다.</div></section>
+    <section class="live-lists">
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">SIGNALS</p><h2>최근 매수 신호</h2></div><span class="chip" id="signal-total">—</span></div><div class="event-list" id="live-signals"></div></article>
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">CLOSED TRADES</p><h2>청산한 거래</h2></div><span class="chip" id="closed-total">—</span></div><div class="event-list" id="live-trades"></div></article>
+    </section>
+    <section class="panel live-section"><div class="panel-heading"><div><p class="section-kicker">DATA QUALITY</p><h2>이 화면의 범위</h2></div></div><ul class="limitations" id="live-limitations"></ul></section>
+    <footer>SurgePilot · 실시간 가상매매 화면 · 실제 계좌 주문이나 체결을 표시하지 않습니다.</footer>
+  </main>
+  <script src="./live.js" defer></script>
+</body>
+</html>

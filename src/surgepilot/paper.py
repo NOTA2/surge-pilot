@@ -9,13 +9,16 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_DOWN
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from zoneinfo import ZoneInfo
 
 from .strategy import StrategyConfig, rise_percent, stop_reason
 from .toss import TossClient
 
 NY = ZoneInfo("America/New_York")
+ALLOWED_ORIGINS = {"https://nota2.github.io", "http://localhost:8000", "http://127.0.0.1:8000"}
 
 
 @dataclass
@@ -126,7 +129,48 @@ class PaperSession:
                                 "미국 정규장 내내 실행 프로세스가 켜져 있어야 합니다."]}
 
 
-def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyConfig, poll_seconds: int = 10):
+def start_report_bridge(path: str | Path, port: int = 8765):
+    """Serve one paper report on loopback for the GitHub Pages dashboard."""
+    target = Path(path).resolve()
+
+    class ReportHandler(BaseHTTPRequestHandler):
+        def _headers(self, status: int, content_type: str = "application/json"):
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
+            origin = self.headers.get("Origin")
+            if origin in ALLOWED_ORIGINS:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.end_headers()
+
+        def do_OPTIONS(self):
+            self._headers(204)
+
+        def do_GET(self):
+            if self.path.split("?", 1)[0] != "/live-report.json":
+                self._headers(404)
+                return
+            try:
+                payload = target.read_bytes()
+            except FileNotFoundError:
+                self._headers(404)
+                return
+            self._headers(200)
+            self.wfile.write(payload)
+
+        def log_message(self, format, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), ReportHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyConfig, poll_seconds: int = 10,
+              bridge_port: int = 8765):
     now = datetime.now(NY)
     market_date = now.date().isoformat()
     market = client.market_day(market_date)
@@ -137,11 +181,16 @@ def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyCo
     close_at = datetime.fromisoformat(regular["endTime"])
     flatten_at = close_at - timedelta(minutes=config.flatten_minutes)
     stop_entries_at = close_at - timedelta(minutes=config.entry_cutoff_minutes)
+    eligible = {item["symbol"] for market in ("NASDAQ", "NYSE", "AMEX")
+                for item in client.stocks(market)}
     session = PaperSession(config, cash, market_date)
     candidates: set[str] = set()
     last_ranking = 0.0
     target = Path(output)
     target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(session.report(), ensure_ascii=False, indent=2), encoding="utf-8")
+    bridge = start_report_bridge(target, bridge_port)
+    print(f"Paper dashboard bridge: http://127.0.0.1:{bridge_port}/live-report.json")
     while True:
         now = datetime.now(NY)
         if now >= close_at:
@@ -153,7 +202,8 @@ def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyCo
             selected = set()
             for ranking_type, duration in (("MARKET_TRADING_VOLUME", "realtime"), ("TOP_GAINERS", "1d")):
                 response = client.rankings(ranking_type, duration)
-                selected.update(item["symbol"] for item in response.get("rankings", []))
+                selected.update(item["symbol"] for item in response.get("rankings", [])
+                                if item["symbol"] in eligible)
             candidates = selected
             last_ranking = time.monotonic()
         symbols = sorted(session.positions) + sorted(candidates - set(session.positions))[:200 - len(session.positions)]
@@ -167,4 +217,5 @@ def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyCo
         for symbol in list(session.positions):
             session._sell(symbol, session.prices[symbol], datetime.now(NY), "last_quote_fallback")
     target.write_text(json.dumps(session.report(), ensure_ascii=False, indent=2), encoding="utf-8")
+    bridge.shutdown()
     return session.report()
