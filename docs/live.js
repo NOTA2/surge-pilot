@@ -50,7 +50,7 @@ async function refresh(){
       const response=await fetch(source+'?ts='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(2500)});
       if(!response.ok)continue;
       const data=await response.json();render(data);
-      if(source.startsWith('http://127.0.0.1'))el('live-source').textContent='로컬 수집기 · 토스 시세';
+      if(source.startsWith('http://127.0.0.1'))el('live-source').textContent=data.is_demo?'로컬 수집기 · 합성 예제':'로컬 수집기 · 토스 시세';
       return;
     }catch(error){/* Try the next configured source. */}
   }
