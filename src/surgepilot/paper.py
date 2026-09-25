@@ -9,16 +9,13 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_DOWN
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
 from zoneinfo import ZoneInfo
 
 from .strategy import StrategyConfig, rise_percent, stop_reason
 from .toss import TossClient
 
 NY = ZoneInfo("America/New_York")
-ALLOWED_ORIGINS = {"https://nota2.github.io", "http://localhost:8000", "http://127.0.0.1:8000"}
 
 
 @dataclass
@@ -129,48 +126,7 @@ class PaperSession:
                                 "미국 정규장 내내 실행 프로세스가 켜져 있어야 합니다."]}
 
 
-def start_report_bridge(path: str | Path, port: int = 8765):
-    """Serve one paper report on loopback for the GitHub Pages dashboard."""
-    target = Path(path).resolve()
-
-    class ReportHandler(BaseHTTPRequestHandler):
-        def _headers(self, status: int, content_type: str = "application/json"):
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Cache-Control", "no-store")
-            origin = self.headers.get("Origin")
-            if origin in ALLOWED_ORIGINS:
-                self.send_header("Access-Control-Allow-Origin", origin)
-                self.send_header("Vary", "Origin")
-                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-                self.send_header("Access-Control-Allow-Private-Network", "true")
-            self.end_headers()
-
-        def do_OPTIONS(self):
-            self._headers(204)
-
-        def do_GET(self):
-            if self.path.split("?", 1)[0] != "/live-report.json":
-                self._headers(404)
-                return
-            try:
-                payload = target.read_bytes()
-            except FileNotFoundError:
-                self._headers(404)
-                return
-            self._headers(200)
-            self.wfile.write(payload)
-
-        def log_message(self, format, *args):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", port), ReportHandler)
-    Thread(target=server.serve_forever, daemon=True).start()
-    return server
-
-
-def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyConfig, poll_seconds: int = 10,
-              bridge_port: int = 8765):
+def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyConfig, poll_seconds: int = 10):
     now = datetime.now(NY)
     market_date = now.date().isoformat()
     market = client.market_day(market_date)
@@ -189,8 +145,6 @@ def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyCo
     target = Path(output)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(session.report(), ensure_ascii=False, indent=2), encoding="utf-8")
-    bridge = start_report_bridge(target, bridge_port)
-    print(f"Paper dashboard bridge: http://127.0.0.1:{bridge_port}/live-report.json")
     while True:
         now = datetime.now(NY)
         if now >= close_at:
@@ -217,5 +171,4 @@ def run_paper(client: TossClient, output: str, cash: Decimal, config: StrategyCo
         for symbol in list(session.positions):
             session._sell(symbol, session.prices[symbol], datetime.now(NY), "last_quote_fallback")
     target.write_text(json.dumps(session.report(), ensure_ascii=False, indent=2), encoding="utf-8")
-    bridge.shutdown()
     return session.report()

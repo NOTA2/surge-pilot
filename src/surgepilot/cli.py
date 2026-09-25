@@ -47,8 +47,6 @@ def main():
         command.add_argument("--output", default="reports/private/result.json")
         if name != "paper":
             command.add_argument("--data", required=True, help="CSV file or directory")
-        else:
-            command.add_argument("--bridge-port", type=int, default=8765, help="local dashboard bridge port")
     sub.add_parser("demo").add_argument("--output", default="docs/report.json")
     sub.add_parser("demo-live").add_argument("--output", default="docs/live-report.json")
     collect = sub.add_parser("collect")
@@ -105,7 +103,7 @@ def main():
         report["limitations"].insert(0, "모든 가격과 가상 포지션은 합성 예제입니다.")
         _write(args.output, report)
     elif args.command == "paper":
-        report = run_paper(TossClient(), args.output, Decimal(args.cash), _config(args), bridge_port=args.bridge_port)
+        report = run_paper(TossClient(), args.output, Decimal(args.cash), _config(args))
         print(f"Paper session ended: {report['summary']}")
     else:
         bars = load_bars(args.data)

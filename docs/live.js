@@ -6,6 +6,7 @@ const when=(v)=>v?new Intl.DateTimeFormat('ko-KR',{timeZone:'America/New_York',m
 const clock=()=>{el('ny-clock').textContent=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date())+' ET';};
 clock();setInterval(clock,1000);
 let imported=false;
+let fileHandle=null;
 
 function chart(points){
   const svg=el('live-chart-svg');if(!points.length){svg.innerHTML='';return;}
@@ -43,18 +44,21 @@ function render(data){
   el('live-limitations').innerHTML=(data.limitations||[]).map((x)=>`<li>${clean(x)}</li>`).join('');
 }
 async function refresh(){
-  if(imported)return;
-  const sources=['http://127.0.0.1:8765/live-report.json','./live-report.json'];
-  for(const source of sources){
-    try{
-      const response=await fetch(source+'?ts='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(2500)});
-      if(!response.ok)continue;
-      const data=await response.json();render(data);
-      if(source.startsWith('http://127.0.0.1'))el('live-source').textContent=data.is_demo?'로컬 수집기 · 합성 예제':'로컬 수집기 · 토스 시세';
-      return;
-    }catch(error){/* Try the next configured source. */}
+  if(fileHandle){
+    try{const file=await fileHandle.getFile();render(JSON.parse(await file.text()));el('live-source').textContent='로컬 파일 · 자동 갱신';}
+    catch(error){el('feed-status').textContent='로컬 파일을 다시 연결하세요';el('stale-warning').hidden=false;}
+    return;
   }
-  el('feed-status').textContent='보고서 연결 실패';el('stale-warning').hidden=false;
+  if(imported)return;
+  try{const response=await fetch('./live-report.json?ts='+Date.now(),{cache:'no-store'});if(!response.ok)throw Error('보고서를 찾을 수 없습니다.');render(await response.json());}
+  catch(error){el('feed-status').textContent='보고서 연결 실패';el('stale-warning').hidden=false;}
 }
-el('live-file').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{render(JSON.parse(await file.text()));imported=true;}catch(error){alert(`보고서를 열 수 없습니다: ${error.message}`);}});
+if(typeof window.showOpenFilePicker!=='function')el('connect-file').hidden=true;
+el('connect-file').addEventListener('click',async()=>{
+  try{
+    const [handle]=await window.showOpenFilePicker({multiple:false,types:[{description:'SurgePilot JSON report',accept:{'application/json':['.json']}}]});
+    fileHandle=handle;imported=false;await refresh();
+  }catch(error){if(error.name!=='AbortError')alert(`로컬 파일에 연결할 수 없습니다: ${error.message}`);}
+});
+el('live-file').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{render(JSON.parse(await file.text()));fileHandle=null;imported=true;el('live-source').textContent='로컬 파일 · 1회 열기';}catch(error){alert(`보고서를 열 수 없습니다: ${error.message}`);}});
 refresh();setInterval(refresh,15000);

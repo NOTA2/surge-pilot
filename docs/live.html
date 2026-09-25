@@ -9,7 +9,7 @@
   <header class="topbar">
     <a class="brand" href="./"><span class="brand-icon">S<span>↗</span></span><span>Surge<span class="brand-light">Pilot</span></span></a>
     <nav class="top-nav" aria-label="화면 선택"><a href="./">과거 검증</a><a class="selected" href="./live.html">장중 대시보드</a></nav>
-    <div class="top-actions"><span class="status-dot" id="live-dot"></span><span id="feed-status">데이터 확인 중</span><label class="upload-button">로컬 보고서 열기<input id="live-file" type="file" accept=".json,application/json"></label></div>
+    <div class="top-actions"><span class="status-dot" id="live-dot"></span><span id="feed-status">데이터 확인 중</span><button class="upload-button" id="connect-file" type="button">로컬 파일 연결</button><label class="upload-button">보고서 1회 열기<input id="live-file" type="file" accept=".json,application/json"></label></div>
   </header>
   <main class="shell live-shell">
     <section class="live-heading"><div><p class="eyebrow">US MARKET / PAPER SESSION</p><h1>장중 대시보드</h1><p>관측 중인 신호, 가상 포지션, 손익과 데이터 갱신 상태를 확인합니다.</p></div><div class="market-clock"><span>뉴욕 시장 시각</span><strong id="ny-clock">—</strong><small id="market-date">—</small></div></section>
