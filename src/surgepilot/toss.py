@@ -6,6 +6,7 @@ No key or token is written to disk.
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -28,10 +29,13 @@ class TossClient:
             raise TossError("TOSS_CLIENT_ID and TOSS_CLIENT_SECRET are required")
         self._token: str | None = None
         self._expires_at = 0.0
+        self._auth_lock = threading.Lock()
 
     def _request(self, method: str, path: str, params: dict | None = None, body: dict | None = None, account: bool = False):
         if path != "/oauth2/token" and (self._token is None or time.time() > self._expires_at - 60):
-            self._authenticate()
+            with self._auth_lock:
+                if self._token is None or time.time() > self._expires_at - 60:
+                    self._authenticate()
         url = self.base_url + path
         if params:
             url += "?" + urllib.parse.urlencode(params)

@@ -3,11 +3,12 @@
 ## 현재: 로컬 검증 + GitHub Pages
 
 ```text
-토스 분봉 ──수집──> 비공개 CSV ──> 백테스트/연구 ──> 비공개 JSON ──파일 선택──> Pages 과거 검증 화면
-토스 시세 ──후보 스캔──> 로컬 가상매매 ──> 비공개 JSON ──파일 연결·자동 갱신──> Pages 장중 화면
+토스 일봉·분봉 ──수집──> 비공개 SQLite ──> 백테스트/연구 ──> 비공개 상세 JSON ──파일 선택──> Pages 과거 검증 화면
+                                                       └──> 공개 집계 JSON ──> Pages 연구 요약
+토스 시세 ──후보 스캔──> 로컬 가상매매 ──> 비공개 JSON ──파일 연결·자동 갱신──> 로컬 장중 시제품
 ```
 
-`docs/report.json`과 `docs/live-report.json`은 공개 합성 예제입니다. 개인 데이터는 `data/private/`, `reports/private/`에만 저장합니다. 현재 주문 생성 명령은 제공하지 않습니다.
+`docs/report.json`은 실제 시세 기반 과거 검증의 집계 보고서이며 종목별 거래는 제외합니다. `docs/live-report.json`은 로컬 장중 시제품의 합성 예제이고 Pages 배포에서 제외합니다. 개인 데이터는 `data/private/`, `reports/private/`에만 저장합니다. 현재 주문 생성 명령은 제공하지 않습니다.
 
 ## 이후: Vercel + Supabase
 
@@ -17,4 +18,4 @@
 4. 장중 화면의 `live-report.json` 입력을 인증된 Vercel API 응답으로 바꿉니다. 보고서 형식(`kind`, `summary`, `positions`, `equity`, `signals`, `trades`)은 유지해 화면 변경을 최소화합니다.
 5. 실거래 주문은 독립된 서버 프로세스에서만 실행하고, 주문 ID 멱등성, 체결 상태 확인, 중복 주문 방지, 세션 종료 시 미체결 주문 처리와 비상 정지를 검증한 후 활성화합니다.
 
-GitHub Pages는 두 화면의 검토와 가상매매 테스트에 사용합니다. 빠른 가격 감시와 실제 주문은 Pages나 GitHub Actions에서 실행하지 않습니다.
+GitHub Pages는 연구 결과 화면에만 사용합니다. 장중 화면은 인증된 Vercel API와 Supabase 저장소를 연결한 뒤 서비스합니다. 빠른 가격 감시와 실제 주문은 Pages나 GitHub Actions에서 실행하지 않습니다.

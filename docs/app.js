@@ -3,6 +3,7 @@ let tab = 'trades';
 const $ = (id) => document.getElementById(id);
 const money = (value) => value == null ? '—' : '$' + Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct = (value) => value == null ? '—' : `${Number(value)>0?'+':''}${Number(value).toFixed(2)}%`;
+const rate = (value) => value == null ? '—' : `${Number(value).toFixed(2)}%`;
 const date = (value) => value ? new Intl.DateTimeFormat('ko-KR',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value)) : '—';
 const stamp = (value) => value ? new Intl.DateTimeFormat('ko-KR',{timeZone:'America/New_York',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)) : '—';
 const dayKey = (value) => value ? new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value)) : '';
@@ -13,11 +14,11 @@ function setReport(data) {
   if (!data || !data.summary || !Array.isArray(data.equity) || !Array.isArray(data.trades) || !Array.isArray(data.signals)) throw Error('SurgePilot 보고서 형식이 아닙니다.');
   report = data;
   const summary = data.summary;
-  $('report-kind').textContent = ({research:'과거 데이터 검증',backtest:'과거 데이터 백테스트',paper:'실시간 가상매매'})[data.kind] || '보고서';
+  $('report-kind').textContent = ({research:'과거 데이터 검증',backtest:'과거 데이터 백테스트',historical_phase:'실제 과거 데이터 검증',paper:'실시간 가상매매'})[data.kind] || '보고서';
   $('demo-warning').hidden = !data.is_demo;
-  $('source').textContent = ({synthetic_demo:'합성 예제',historical_csv:'과거 CSV',toss_live_quotes:'토스 실시간 시세'})[data.source] || data.source || '—';
+  $('source').textContent = ({synthetic_demo:'합성 예제',historical_csv:'과거 CSV',toss_historical:'토스 과거 시세',toss_live_quotes:'토스 실시간 시세'})[data.source] || data.source || '—';
   const first = data.equity[0]?.time, last = data.equity.at(-1)?.time;
-  $('period').textContent = first && last ? `${date(first)} – ${date(last)}` : '—';
+  $('period').textContent = data.period ? data.period.join(' – ') : first && last ? `${date(first)} – ${date(last)}` : '—';
   $('config-short').textContent = `${data.strategy?.lookback_minutes || '—'}분 / +${data.strategy?.rise_pct || '—'}%`;
   $('equity-final').textContent = money(summary.final_equity_usd);
   $('equity-initial').textContent = `시작 ${money(summary.initial_cash_usd)}`;
@@ -35,6 +36,7 @@ function setReport(data) {
   showValidation(data);
   showRules(data.strategy || {});
   $('limitations').innerHTML = (data.limitations || []).map((line)=>`<li>${escapeHtml(line)}</li>`).join('');
+  $('table-empty').textContent = data.aggregate_only ? '공개 보고서에는 종목별 거래를 싣지 않았습니다. 로컬 상세 보고서를 열어 확인하세요.' : '선택한 조건에 해당하는 기록이 없습니다.';
   renderTable();
 }
 
@@ -64,6 +66,21 @@ function showValidation(data) {
     html += row('50% 급등 사례 포착',data.event_analysis?.event_recall_pct == null?'사례 없음':`${data.event_analysis.caught_before_50pct}/${data.event_analysis.days_with_50pct_rise} (${pct(data.event_analysis.event_recall_pct)})`);
     html += row('무작위 종목·일자 수익률',pct(data.random_control?.summary?.net_return_pct),tone(data.random_control?.summary?.net_return_pct));
     html += '<p class="validation-note">매개변수는 학습 기간에서만 선택했습니다. 무작위 표본은 보조 검사이며, 실제 판단에는 전체 종목의 별도 기간 결과와 체결 가능성을 함께 봐야 합니다.</p>';
+  } else if(data.kind==='historical_phase') {
+    html += row('검증 단계',data.phase==='winners'?'50% 급등 사례':'전일 거래대금 상위 종목');
+    html += row('선택 종목·일자',`${data.coverage?.selected_symbol_days ?? '—'}개`);
+    html += row('분봉 확보',`${data.coverage?.with_minute_data ?? '—'}개 · ${rate(data.coverage?.coverage_pct)}`);
+    html += row('정규장 양끝 관측',`${data.coverage?.near_full_regular_session ?? '—'}개`);
+    if(data.phase==='winners'){
+      html += row('50% 사례 장중 도달',`${data.event_analysis?.reached_50pct_in_regular_session ?? '—'}개`);
+      html += row('첫 1분 이후 포착 가능',`${data.event_analysis?.catchable_after_first_minute ?? '—'}개`);
+      html += row('50% 도달 전 신호',data.event_analysis?.early_signal_recall_pct == null?'측정 불가':`${data.event_analysis.signalled_before_50pct}개 · ${rate(data.event_analysis.early_signal_recall_pct)}`);
+      html += row('50% 도달 전 매수',`${data.event_analysis?.bought_before_50pct ?? '—'}개`);
+      html += '<p class="validation-note">급등 사례는 사후에 골랐습니다. 이 단계의 수익률만으로 전략 성과를 판단할 수 없습니다.</p>';
+    }else{
+      html += row('순수익률',pct(data.summary.net_return_pct),tone(data.summary.net_return_pct));
+      html += '<p class="validation-note">매수 가능 종목은 전일 거래대금 추정치로 선정했습니다. 실제 거래대금이 아닌 일봉 가격×거래량 근사치입니다.</p>';
+    }
   } else if(data.kind==='paper') {
     html += row('시장 날짜',data.market_date || '—');
     html += row('현재 보유 종목',`${data.positions?.length || 0}개`);
@@ -102,3 +119,27 @@ document.querySelectorAll('.tab').forEach((button)=>button.addEventListener('cli
 ['day-filter','symbol-filter'].forEach((id)=>$(id).addEventListener('change',renderTable));
 $('file').addEventListener('change',async(event)=>{const file=event.target.files?.[0];if(!file)return;try{setReport(JSON.parse(await file.text()));}catch(error){alert(`보고서를 열 수 없습니다: ${error.message}`);}});
 fetch('./report.json').then((response)=>{if(!response.ok)throw Error('보고서를 찾을 수 없습니다.');return response.json();}).then(setReport).catch((error)=>{$('report-kind').textContent='보고서 없음';$('validation').textContent=error.message;});
+
+function showStudy(data) {
+  if(!data || !Array.isArray(data.period) || !data.winners) throw Error('연구 요약 형식이 아닙니다.');
+  $('study-period').textContent = `${data.period[0]} – ${data.period[1]}`;
+  const winner = data.winners, top = data.top100;
+  const cards = [
+    ['전체 조사',`${Number(data.universe_stocks || 0).toLocaleString()}종목 · ${data.session_count}거래일`],
+    ['50% 급등 사례',`${winner.events ?? '—'}건 · 시가 대비 ${winner.open_to_high_50pct ?? '—'}건`],
+    ['50% 도달 전 신호',winner.early_signals == null?'분봉 검증 중':`${winner.early_signals}/${winner.catchable_after_first_minute}건`],
+    ['전일 거래대금 상위 100',top?.minute_covered == null ? `${top?.pairs ?? '—'} 종목·일자 검증 예정` : `${top.minute_covered}/${top.pairs} 종목·일자 확보`]
+  ];
+  $('study-summary').innerHTML=cards.map(([label,value])=>`<div class="study-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')+
+    `<p class="study-note">급등 사례 분봉 ${escapeHtml(winner.minute_covered ?? '—')}/${escapeHtml(winner.events ?? '—')}건 확보. 급등주는 사후 선정이므로 수익률 평가에 쓰지 않습니다. 상위 100은 전일 일봉 가격 × 거래량으로 추정한 거래대금 순위입니다. 기업행위로 인한 가격 변화를 추가 확인해야 합니다.</p>`;
+  $('study-top-result').innerHTML=top?.net_return_pct == null ? '<span>상위 100종목의 손익 검증이 끝나면 이곳에 실제 집계 결과가 표시됩니다.</span>' :
+    `<span>상위 100종목 기본 규칙</span><strong class="${tone(top.net_return_pct)}">${pct(top.net_return_pct)}</strong><span>최대 낙폭 ${pct(-top.max_drawdown_pct)} · 거래 ${escapeHtml(top.trades)}건 / ${escapeHtml(top.days_with_trade)}일 · 승률 ${rate(top.win_rate_pct)}</span>`;
+  if(!Array.isArray(data.liquidity) || !data.liquidity.length)return;
+  $('study-liquidity').innerHTML='<h3>진입 시점 누적 거래대금 조건</h3><table><thead><tr><th>최소 거래대금</th><th>50% 전 신호</th><th>50% 전 매수</th><th>기준 진입 놓침</th><th>공통 진입 지연</th><th>상위 100 거래</th><th>상위 100 수익률</th></tr></thead><tbody>'+
+    data.liquidity.map((item)=>`<tr><td>${money(item.threshold_usd)}</td><td>${item.winners_early_signal_events == null?'검증 중':escapeHtml(item.winners_early_signal_events)+'건'}</td><td>${item.winners_early_bought_events == null?'검증 중':escapeHtml(item.winners_early_bought_events)+'건'}</td><td>${item.winners_baseline_buys_missed == null?'—':escapeHtml(item.winners_baseline_buys_missed)+'건'}</td><td>${item.winners_median_entry_delay_minutes == null?'—':escapeHtml(item.winners_median_entry_delay_minutes)+'분'}</td><td>${item.top100_trades == null?'검증 중':escapeHtml(item.top100_trades)+'건'}</td><td class="${tone(item.top100_return_pct)}">${pct(item.top100_return_pct)}</td></tr>`).join('')+'</tbody></table>';
+  if(Array.isArray(data.costs) && data.costs.length){
+    $('study-costs').innerHTML='<h3>체결 불리함 가정</h3><table><thead><tr><th>편도 체결 불리함</th><th>편도 수수료</th><th>거래</th><th>상위 100 수익률</th><th>최대 낙폭</th></tr></thead><tbody>'+
+      data.costs.map((item)=>`<tr><td>${escapeHtml(item.slippage_bps_each_side)} bp</td><td>${escapeHtml(item.fee_bps_each_side)} bp</td><td>${escapeHtml(item.trades)}건</td><td class="${tone(item.net_return_pct)}">${pct(item.net_return_pct)}</td><td>${pct(-item.max_drawdown_pct)}</td></tr>`).join('')+'</tbody></table>';
+  }
+}
+fetch('./study-summary.json').then((response)=>{if(!response.ok)throw Error('연구 요약 없음');return response.json();}).then(showStudy).catch(()=>{$('study-summary').textContent='실제 데이터 수집 및 검증을 진행 중입니다.';});

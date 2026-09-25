@@ -1,4 +1,4 @@
-name: Deploy dashboards to GitHub Pages
+name: Deploy research dashboard to GitHub Pages
 on:
   push:
     branches: [main]
@@ -19,8 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Prepare public research site
+        run: |
+          mkdir -p site
+          cp docs/index.html docs/app.js docs/style.css docs/report.json docs/study-summary.json docs/.nojekyll site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4

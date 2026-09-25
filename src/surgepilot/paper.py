@@ -29,6 +29,8 @@ class PaperPosition:
 
 class PaperSession:
     def __init__(self, config: StrategyConfig, cash: Decimal, market_date: str):
+        if config.min_cumulative_dollar_volume:
+            raise ValueError("live paper quotes do not provide cumulative dollar volume")
         self.config = config
         self.initial_cash = cash
         self.cash = cash

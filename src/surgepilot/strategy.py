@@ -15,6 +15,7 @@ class StrategyConfig:
     max_entries_per_day: int = 3
     min_price: Decimal = Decimal("1")
     min_bar_volume: int = 1000
+    min_cumulative_dollar_volume: Decimal = Decimal("0")
     entry_cutoff_minutes: int = 20
     flatten_minutes: int = 5
     fee_bps: Decimal = Decimal("10")
@@ -26,7 +27,8 @@ class StrategyConfig:
         for name in ("rise_pct", "trail_pct", "stop_pct", "allocation_pct"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be positive")
-        if self.allocation_pct > 100 or self.fee_bps < 0 or self.slippage_bps < 0:
+        if (self.allocation_pct > 100 or self.fee_bps < 0 or self.slippage_bps < 0
+                or self.min_cumulative_dollar_volume < 0):
             raise ValueError("invalid allocation or costs")
 
     def to_dict(self) -> dict:

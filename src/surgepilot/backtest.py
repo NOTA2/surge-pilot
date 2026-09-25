@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal, ROUND_DOWN
-from itertools import groupby
+from itertools import chain, groupby
 from zoneinfo import ZoneInfo
 
 from .data import Bar
@@ -30,16 +30,20 @@ def _money(value: Decimal) -> float:
     return round(float(value), 4)
 
 
-def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal = Decimal("10000")) -> dict:
-    if not bars:
-        raise ValueError("empty bar set")
+def run_backtest(bars, config: StrategyConfig, initial_cash: Decimal = Decimal("10000"),
+                 assume_sorted: bool = False) -> dict:
     if initial_cash <= 0:
         raise ValueError("initial cash must be positive")
-    bars = sorted(bars, key=lambda b: (b.timestamp, b.symbol))
+    ordered = iter(bars if assume_sorted else sorted(bars, key=lambda b: (b.timestamp, b.symbol)))
+    first = next(ordered, None)
+    if first is None:
+        raise ValueError("empty bar set")
+    ordered = chain((first,), ordered)
     cash = initial_cash
     positions: dict[str, Position] = {}
     pending: dict[str, dict] = {}
     histories: dict[str, list[tuple[datetime, Decimal]]] = defaultdict(list)
+    cumulative_dollars: dict[str, Decimal] = defaultdict(lambda: ZERO)
     last_prices: dict[str, Decimal] = {}
     trades: list[dict] = []
     signals: list[dict] = []
@@ -64,7 +68,9 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
                        "pnl_usd": _money(pnl), "return_pct": _money(pnl / (pos.entry_price * pos.quantity + pos.entry_fee) * 100),
                        "reason": reason})
 
-    for timestamp, same_time in groupby(bars, key=lambda b: b.timestamp):
+    last_timestamp = first.timestamp
+    for timestamp, same_time in groupby(ordered, key=lambda b: b.timestamp):
+        last_timestamp = timestamp
         now = timestamp.astimezone(NY)
         if not time(9, 30) <= now.time() < time(16, 0):
             continue
@@ -82,6 +88,7 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
             entries_today = 0
             entered_symbols.clear()
             histories.clear()
+            cumulative_dollars.clear()
             pending.clear()
             last_prices.clear()
         group = list(same_time)
@@ -115,6 +122,9 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
             order = pending.pop(bar.symbol, None)
             if order is None or now.time() >= cutoff_time or bar.symbol in positions:
                 continue
+            if timestamp - order["signal_time"] > timedelta(minutes=1):
+                signals.append({**order["signal"], "decision": "stale_signal"})
+                continue
             slot = order["slot"]
             allocation = min(config.allocation_pct, Decimal(100) - Decimal(slot) * config.allocation_pct)
             budget = min(cash / (1 + fee_rate), day_start_equity * allocation / 100)
@@ -142,10 +152,12 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
         candidates = []
         for bar in group:
             last_prices[bar.symbol] = bar.close
+            cumulative_dollars[bar.symbol] += bar.close * bar.volume
             history = histories[bar.symbol]
             history.append((timestamp, bar.close))
             if (now.time() >= cutoff_time or bar.symbol in entered_symbols or bar.symbol in pending
-                    or bar.symbol in positions or bar.close < config.min_price or bar.volume < config.min_bar_volume):
+                    or bar.symbol in positions or bar.close < config.min_price or bar.volume < config.min_bar_volume
+                    or cumulative_dollars[bar.symbol] < config.min_cumulative_dollar_volume):
                 continue
             rise = rise_percent(history, timestamp, config.lookback_minutes)
             if rise is not None and rise >= config.rise_pct:
@@ -157,7 +169,8 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
             if entries_today + len(pending) >= config.max_entries_per_day:
                 signals.append({**signal, "decision": "daily_entry_limit"})
             else:
-                pending[bar.symbol] = {"slot": entries_today + len(pending), "signal": signal}
+                pending[bar.symbol] = {"slot": entries_today + len(pending), "signal": signal,
+                                       "signal_time": timestamp}
 
         marked = cash + sum(pos.quantity * last_prices.get(symbol, pos.last_close) for symbol, pos in positions.items())
         equity.append({"time": timestamp.isoformat(), "equity": _money(marked)})
@@ -166,7 +179,7 @@ def run_backtest(bars: list[Bar], config: StrategyConfig, initial_cash: Decimal 
         sell(symbol, pos.last_close, pos.last_time, "missing_cutoff_bar")
     for order in pending.values():
         signals.append({**order["signal"], "decision": "no_next_bar"})
-    equity.append({"time": bars[-1].timestamp.isoformat(), "equity": _money(cash)})
+    equity.append({"time": last_timestamp.isoformat(), "equity": _money(cash)})
 
     peak = initial_cash
     max_drawdown = ZERO

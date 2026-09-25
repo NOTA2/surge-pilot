@@ -39,6 +39,30 @@ class StrategyTests(unittest.TestCase):
         result = run_backtest(bars, StrategyConfig(lookback_minutes=2, rise_pct=Decimal("9")))
         self.assertEqual(result["trades"][0]["reason"], "missing_cutoff_bar")
 
+    def test_cumulative_dollar_volume_gate_uses_only_volume_so_far(self):
+        start = datetime(2026, 9, 21, 9, 30, tzinfo=NY)
+        prices = [10, 10, 11, 11, 11]
+        bars = [Bar(start + timedelta(minutes=i), "TEST", Decimal(str(price)), Decimal(str(price)),
+                    Decimal(str(price)), Decimal(str(price)), 5000) for i, price in enumerate(prices)]
+        bars.append(Bar(start.replace(hour=15, minute=55), "TEST", Decimal("11"),
+                        Decimal("11"), Decimal("11"), Decimal("11"), 5000))
+        config = StrategyConfig(lookback_minutes=2, rise_pct=Decimal("9"),
+                                min_cumulative_dollar_volume=Decimal("200000"))
+        result = run_backtest(bars, config)
+        self.assertEqual(result["trades"][0]["entry_time"], bars[4].timestamp.isoformat())
+        self.assertEqual(result["signals"][0]["time"], bars[3].timestamp.isoformat())
+
+    def test_signal_does_not_fill_after_missing_next_minute(self):
+        start = datetime(2026, 9, 21, 9, 30, tzinfo=NY)
+        offsets = [0, 1, 2, 5]
+        prices = [10, 10, 11, 11]
+        bars = [Bar(start + timedelta(minutes=offset), "TEST", Decimal(str(price)),
+                    Decimal(str(price)), Decimal(str(price)), Decimal(str(price)), 5000)
+                for offset, price in zip(offsets, prices)]
+        result = run_backtest(bars, StrategyConfig(lookback_minutes=2, rise_pct=Decimal("9")))
+        self.assertEqual(result["trades"], [])
+        self.assertTrue(any(signal["decision"] == "stale_signal" for signal in result["signals"]))
+
 
 if __name__ == "__main__":
     unittest.main()
