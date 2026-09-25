@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09131d">
+  <title>SurgePilot | 거래 검증 대시보드</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-icon">S<span>↗</span></span><span>Surge<span class="brand-light">Pilot</span></span></a>
+    <div class="top-actions">
+      <span class="status-dot"></span><span id="report-kind">데이터 확인 중</span>
+      <label class="upload-button">로컬 보고서 열기 <input id="file" type="file" accept=".json,application/json"></label>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">US MOMENTUM RESEARCH / DAILY REVIEW</p>
+        <h1>시그널부터 손익까지,<br><em>한눈에 검증합니다.</em></h1>
+        <p class="hero-sub">분 단위 급등 전략의 진입, 청산, 성과를 추적합니다. 보고서의 출처를 먼저 확인하세요.</p>
+      </div>
+      <div class="hero-meta">
+        <div><span>데이터 출처</span><strong id="source">—</strong></div>
+        <div><span>분석 기간</span><strong id="period">—</strong></div>
+        <div><span>전략</span><strong id="config-short">—</strong></div>
+      </div>
+    </section>
+    <div id="demo-warning" class="notice" hidden><strong>합성 예제 데이터</strong> · 이 결과는 화면과 계산 흐름을 확인하기 위한 예제이며 실제 시장 성과가 아닙니다.</div>
+    <section class="metrics" aria-label="성과 요약">
+      <article class="metric"><span>최종 평가금액</span><strong id="equity-final">—</strong><small id="equity-initial">시작 —</small></article>
+      <article class="metric"><span>순수익률</span><strong id="return">—</strong><small>가정한 수수료·체결 불리함 포함</small></article>
+      <article class="metric"><span>최대 낙폭</span><strong id="drawdown">—</strong><small>평가금액 기준</small></article>
+      <article class="metric"><span>거래 / 승률</span><strong id="trade-win">—</strong><small id="signals-count">시그널 —</small></article>
+    </section>
+    <section class="grid-main">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><p class="section-kicker">PERFORMANCE</p><h2>계좌 평가금액 추이</h2></div><span class="chip" id="chart-range">전체 기간</span></div>
+        <div class="chart-wrap"><svg id="chart" viewBox="0 0 800 280" role="img" aria-label="시간에 따른 계좌 평가금액"></svg></div>
+        <div class="chart-axis"><span id="chart-start">—</span><span id="chart-end">—</span></div>
+      </article>
+      <article class="panel research-panel">
+        <div class="panel-heading"><div><p class="section-kicker">VALIDATION</p><h2>검증 현황</h2></div></div>
+        <div id="validation" class="validation-content"></div>
+      </article>
+    </section>
+    <section class="panel activity-panel">
+      <div class="panel-heading"><div><p class="section-kicker">ACTIVITY</p><h2>일별 거래 기록</h2></div><div class="filters"><select id="day-filter" aria-label="거래일 선택"><option value="all">전체 거래일</option></select><select id="symbol-filter" aria-label="종목 선택"><option value="all">전체 종목</option></select></div></div>
+      <div class="tabs" role="tablist"><button class="tab active" data-tab="trades" role="tab" aria-selected="true">체결 거래</button><button class="tab" data-tab="signals" role="tab" aria-selected="false">매수 신호</button></div>
+      <div class="table-wrap"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
+      <div id="table-empty" class="empty" hidden>선택한 조건에 해당하는 기록이 없습니다.</div>
+    </section>
+    <section class="bottom-grid">
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">RULES</p><h2>적용한 전략</h2></div></div><div id="rules" class="rules"></div></article>
+      <article class="panel"><div class="panel-heading"><div><p class="section-kicker">READ THIS FIRST</p><h2>해석할 때 주의할 점</h2></div></div><ul id="limitations" class="limitations"></ul></article>
+    </section>
+    <footer>SurgePilot · 연구용 대시보드 · 계좌 키와 개인 거래 내역은 공개 저장소에 올리지 마세요.</footer>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
