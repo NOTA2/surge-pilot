@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="surgepilot-token" content="__CSRF_TOKEN__">
+  <title>SurgePilot · 로컬 연구실</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark">S↗</span><span>SurgePilot <small>LOCAL LAB</small></span></div><span class="local-badge">이 컴퓨터에서만 실행</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">US MOMENTUM / RESEARCH CONTROL</p><h1>숫자를 바꾸고,<br><em>바로 결과를 확인하세요.</em></h1><p>저장된 30거래일 분봉으로 포착률과 손익을 다시 계산합니다. 종목별 기록과 토스 키는 로컬에만 둡니다.</p></section>
+    <div class="workspace">
+      <section class="panel settings">
+        <div class="panel-head"><div><p class="eyebrow">01 / PARAMETERS</p><h2>전략 설정</h2></div><span class="chip">거래대금 하한 0</span></div>
+        <form id="research-form">
+          <div class="fields">
+            <label><span>N · 관찰 시간</span><div class="input-wrap"><input id="lookback" name="lookback" type="number" min="1" max="120" step="1" value="5" required><b>분</b></div></label>
+            <label><span>M · 상승 신호</span><div class="input-wrap"><input id="rise" name="rise" type="number" min="0.01" max="1000" step="0.01" value="8" required><b>%</b></div></label>
+            <label><span>X · 고점 대비 청산</span><div class="input-wrap"><input id="trail" name="trail" type="number" min="0.01" max="100" step="0.01" value="7" required><b>%</b></div></label>
+            <label><span>Y · 매수가 대비 손절</span><div class="input-wrap"><input id="stop" name="stop" type="number" min="0.01" max="100" step="0.01" value="5" required><b>%</b></div></label>
+          </div>
+          <button class="primary" id="run-report" type="submit">저장된 데이터로 분석 실행 <span>↗</span></button>
+        </form>
+        <p class="hint">분석에는 토스 API 호출이 없으며 약 20초가 걸립니다. 결과는 아래 보고서에 자동 반영됩니다.</p>
+      </section>
+      <section class="panel data-panel">
+        <div class="panel-head"><div><p class="eyebrow">02 / DATA</p><h2>장전 데이터</h2></div><span class="chip" id="coverage-chip">확인 중</span></div>
+        <p>개장 전에 이미 급등한 종목을 평가하려면 장전 분봉을 추가로 수집해야 합니다. 토스 키는 다운로드 폴더의 파일에서 서버가 직접 읽습니다.</p>
+        <div class="ip-box"><div><span>현재 외부 IP</span><strong id="ip-value">조회 중…</strong></div><button id="check-ip" class="ghost" type="button">다시 확인</button></div>
+        <p class="hint">토스 Open API 허용 IP에 위 주소를 등록한 뒤 수집하세요. IP는 바뀔 수 있습니다.</p>
+        <button class="secondary" id="run-premarket" type="button">장전 분봉 수집 + 보고서 갱신 <span>↗</span></button>
+      </section>
+    </div>
+    <section class="panel status-panel" aria-live="polite"><div class="panel-head"><div><p class="eyebrow">03 / EXECUTION</p><h2>실행 상태</h2></div><span class="status-tag" id="status-tag">대기</span></div><div class="status-row"><div><strong id="status-message">상태를 확인하는 중입니다.</strong><small id="status-time"></small></div><button id="cancel" class="ghost" type="button" hidden>실행 중단</button></div><div class="progress" id="progress" hidden><span></span></div></section>
+    <section class="results"><div class="results-title"><div><p class="eyebrow">04 / RESULTS</p><h2>최근 보고서</h2></div><a id="open-report" href="/report" target="_blank" rel="noopener" hidden>새 탭에서 크게 보기 ↗</a></div><div class="metric-grid" id="metrics"><div class="metric"><span>보고서 준비 중</span><strong>—</strong></div></div><div class="report-shell" id="report-shell"><div class="report-empty" id="report-empty">분석을 실행하면 이곳에 상세 HTML 보고서가 표시됩니다.</div><iframe id="report-frame" title="SurgePilot 상세 분석 보고서" sandbox="allow-scripts" hidden></iframe></div></section>
+    <footer>이 앱은 <code>127.0.0.1</code>에서만 실행됩니다. 공개 GitHub Pages의 집계는 변경 사항을 별도로 push한 뒤 갱신됩니다.</footer>
+  </main>
+</body>
+</html>
