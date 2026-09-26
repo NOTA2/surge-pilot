@@ -165,14 +165,42 @@ function showDiscovery(data) {
   const w=data.groups.winners.all, n=data.groups.near_miss.all;
   const complete=w.full_day_fetched===w.candidates && n.full_day_fetched===n.candidates;
   const rowsFor=(groups)=>[['all','전체'],['first_half','앞 15일'],['second_half','뒤 15일']]
-    .flatMap(([period,suffix])=>[['winners','50% 급등'],['near_miss','20~49% 정체'],['extreme_gap_5x','시가 5배 이상 · 급등']]
+    .flatMap(([period,suffix])=>[['winners','일봉 50% 급등'],['near_miss','일봉 20~49%'],['extreme_gap_5x','시가 5배 이상 · 급등']]
       .map(([group,label])=>{const m=groups[group][period];return `<tr><td>${escapeHtml(label)} · ${suffix}</td><td>${escapeHtml(m.candidates)}</td><td>${escapeHtml(m.full_day_fetched)}</td><td>${escapeHtml(m.signals)}</td><td>${group==='near_miss'?'—':escapeHtml(m.before_50pct)}</td><td>${group==='near_miss'?'—':escapeHtml(m.after_50pct)}</td><td>${escapeHtml(m.premarket_signals)}</td></tr>`;}));
   const rows=['<tr><th colspan="7">장전 포함 · 일봉 후보 표본</th></tr>',...rowsFor(data.groups),
     '<tr><th colspan="7">정규장 첫 신호만</th></tr>',...rowsFor(data.regular_groups)];
+  const crossover=data.premarket_50pct_crossovers_from_daily_near_misses?.all;
+  const adjusted=data.all_hours_reclassified_observed?.all;
+  const refinementRows=[];
+  for(const [scope,periods] of [['all_hours',['all','first_half','second_half']],['regular_only',['all']]]) {
+    for(const period of periods) {
+      for(const rise of ['8','10','12']) {
+        const base=scope==='all_hours'?data.groups:data.regular_groups;
+        const refined=data.refinements?.[scope]?.[rise]?.[period];
+        const early=rise==='8'?base.winners[period].before_50pct:refined?.before_50pct;
+        const late=rise==='8'?base.winners[period].after_50pct:refined?.after_50pct;
+        const near=rise==='8'?base.near_miss[period].signals:refined?.near_miss_signals;
+        const lead=rise==='8'?base.winners[period].median_lead_minutes:refined?.median_lead_minutes;
+        const alerts=early+late+near;
+        const label=(scope==='all_hours'?'장전 포함':'정규장')+' · '+({all:'전체',first_half:'앞 15일',second_half:'뒤 15일'}[period]);
+        refinementRows.push(`<tr${rise==='10'?' class="study-selected"':''}><td>${escapeHtml(label)}</td><td>5분 +${rise}%</td><td>${escapeHtml(early)}</td><td>${escapeHtml(near)}</td><td>${escapeHtml(late)}</td><td>${escapeHtml(alerts)}</td><td>${rate(alerts?early/alerts*100:null)}</td><td>${escapeHtml(lead??'—')}분</td></tr>`);
+      }
+    }
+  }
+  const adjustedRows=['8','10','12'].map((rise)=>{
+    const m=adjusted?.[rise];
+    return `<tr${rise==='10'?' class="study-selected"':''}><td>5분 +${rise}%</td><td>${escapeHtml(m?.before_50pct)}</td><td>${escapeHtml(m?.remaining_near_miss_signals)}</td><td>${escapeHtml(m?.after_50pct)}</td><td>${escapeHtml(m?.observed_alerts)}</td><td>${rate(m?.observed_pre50_alert_fraction_pct)}</td></tr>`;
+  });
   $('study-discovery').innerHTML=`<h3>고정 발견 기준 · 주문 없음</h3>`+
     `<p class="study-note">${escapeHtml(data.rule.label)} · 미국 동부 04:00~15:59 · 최저 $${escapeHtml(data.rule.minimum_price_usd)}. 완료된 1분봉 종가만 사용하고, 일봉의 +50% 결과는 사후 평가에만 씁니다.</p>`+
-    `<p class="study-note">${escapeHtml(data.universe_stocks)}종목의 일봉을 조사한 30거래일 후보 표본입니다. 장전 포함 첫 경보 ${escapeHtml(data.observed_alerts)}건(하루 평균 ${escapeHtml(data.average_alerts_per_session)}건) 중 급등 전 발견은 <strong>${escapeHtml(w.before_50pct)}건 (${rate(data.observed_pre50_alert_fraction_pct)})</strong>입니다. 첫 분봉 이후 +50% 도달한 ${escapeHtml(w.catchable_after_first_bar)}건 기준 포착률은 ${rate(data.catchable_recall_pct)}, 50%까지 선행 중앙값은 ${escapeHtml(w.median_lead_minutes)}분입니다. 정규장 첫 경보 ${escapeHtml(data.regular_observed_alerts)}건 중 급등 전 발견 비율은 ${rate(data.regular_pre50_alert_fraction_pct)}입니다. 장전에만 +20%였다가 정규장에서 내려온 종목은 일봉 후보 선정에서 빠질 수 있어 장전 포함 비율은 전체 시장 적중률이 아닙니다.${complete?'':' 분봉 수집도 미완료입니다.'}</p>`+
+    `<p class="study-note">${escapeHtml(data.universe_stocks)}종목의 일봉을 조사한 30거래일 후보 표본입니다. 장전 포함 첫 경보 ${escapeHtml(data.observed_alerts)}건(하루 평균 ${escapeHtml(data.average_alerts_per_session)}건) 중 일봉 급등주 사전 발견은 <strong>${escapeHtml(w.before_50pct)}건 (${rate(data.observed_pre50_alert_fraction_pct)})</strong>입니다. 첫 분봉 이후 +50% 도달한 ${escapeHtml(w.catchable_after_first_bar)}건 기준 포착률은 ${rate(data.catchable_recall_pct)}, 50%까지 선행 중앙값은 ${escapeHtml(w.median_lead_minutes)}분입니다. 정규장 첫 경보 ${escapeHtml(data.regular_observed_alerts)}건 중 일봉 급등주 사전 발견 비율은 ${rate(data.regular_pre50_alert_fraction_pct)}입니다. 장전에만 +20%였다가 정규장에서 내려온 종목은 일봉 후보 선정에서 빠질 수 있어 장전 포함 비율은 전체 시장 적중률이 아닙니다.${complete?'':' 분봉 수집도 미완료입니다.'}</p>`+
     `<table><thead><tr><th>구분</th><th>일봉 후보</th><th>종일 분봉 수집</th><th>첫 신호</th><th>50% 전</th><th>50% 이후</th><th>장전 신호</th></tr></thead><tbody>${rows.join('')}</tbody></table>`+
+    `<h3>강한 신호 조건 비교</h3><p class="study-note">전일 종가 +20%는 유지하고 이전 5분 상승폭만 높였습니다. +8%는 관찰 신호, +10%는 강한 신호 후보입니다. 각 조건의 첫 충족 분봉으로 계산했습니다.</p>`+
+    `<table><thead><tr><th>기간</th><th>조건</th><th>일봉 50% 전</th><th>일봉 20~49%</th><th>일봉 50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th><th>선행 중앙값</th></tr></thead><tbody>${refinementRows.join('')}</tbody></table>`+
+    `<p class="study-note">*일봉 후보 표본에서 관측한 비율이며 시장 전체 적중률이 아닙니다. 장전 전용 후보는 빠질 수 있습니다. 뒤 15일도 탐색에 사용했으므로 독립 검증이 아닙니다. 거래량 하한은 적용하지 않았습니다.</p>`+
+    `<h3>장전 +50% 재분류</h3><p class="study-note">일봉 20~49% 후보 중 ${escapeHtml(crossover?.cases)}건은 저장된 장전 분봉에서 이미 +50%에 도달했습니다. 이 사례를 첫 +50% 이전·이후 신호로 다시 분류한 수치입니다.</p>`+
+    `<table><thead><tr><th>조건</th><th>50% 전</th><th>나머지 일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th></tr></thead><tbody>${adjustedRows.join('')}</tbody></table>`+
+    `<p class="study-note">*저장된 일봉 후보와 장전 분봉 범위의 관측 비율입니다. 장전에서만 +20%에 도달한 다른 종목은 후보 수집에서 빠질 수 있어 시장 전체 적중률은 아닙니다.</p>`+
     `<p class="study-note">시가 5배 이상 행은 급등 행에 포함된 하위 집합입니다. 액면병합 등 기업행위 여부를 확인하기 전에는 성능 해석에 주의해야 합니다. 기존 매매 백테스트의 N/M/X/Y와 독립적인 발견 전용 규칙입니다.</p>`;
 }
 fetch('./discovery-summary.json').then(response=>{if(!response.ok)throw Error('발견 규칙 요약 없음');return response.json();}).then(showDiscovery).catch(()=>{$('study-discovery').textContent='발견 규칙 보고서를 불러올 수 없습니다.';});
