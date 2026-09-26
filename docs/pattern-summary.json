@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-26T04:16:37.471051-04:00",
+  "generated_at": "2026-09-26T04:27:49.425072-04:00",
   "period": [
     "2026-08-13",
     "2026-09-24"
@@ -117,6 +117,59 @@
           "entries": 152,
           "median_maximum_favorable_pct": 22.66,
           "median_maximum_adverse_pct": -12.4
+        }
+      },
+      "entry_methods": {
+        "immediate": {
+          "signals": 294,
+          "consecutive_entries": 286,
+          "before_50pct_entries": 262,
+          "target_first": 102,
+          "stop_first": 151,
+          "ambiguous": 16,
+          "neither": 17,
+          "before_50pct_target_first": 88,
+          "before_50pct_stop_first": 149,
+          "paired_immediate_entries": 0,
+          "paired_immediate_target_first": 0,
+          "paired_immediate_stop_first": 0,
+          "early_entries": 137,
+          "late_entries": 149,
+          "median_delay_minutes": 0.0
+        },
+        "pullback_recovery": {
+          "signals": 213,
+          "consecutive_entries": 212,
+          "before_50pct_entries": 137,
+          "target_first": 59,
+          "stop_first": 128,
+          "ambiguous": 0,
+          "neither": 25,
+          "before_50pct_target_first": 37,
+          "before_50pct_stop_first": 75,
+          "paired_immediate_entries": 209,
+          "paired_immediate_target_first": 70,
+          "paired_immediate_stop_first": 124,
+          "early_entries": 100,
+          "late_entries": 112,
+          "median_delay_minutes": 8.0
+        },
+        "delayed_breakout": {
+          "signals": 176,
+          "consecutive_entries": 172,
+          "before_50pct_entries": 112,
+          "target_first": 59,
+          "stop_first": 96,
+          "ambiguous": 7,
+          "neither": 10,
+          "before_50pct_target_first": 31,
+          "before_50pct_stop_first": 70,
+          "paired_immediate_entries": 172,
+          "paired_immediate_target_first": 69,
+          "paired_immediate_stop_first": 84,
+          "early_entries": 78,
+          "late_entries": 94,
+          "median_delay_minutes": 5.0
         }
       },
       "alert_features": {
@@ -238,6 +291,59 @@
           "median_maximum_adverse_pct": -13.0
         }
       },
+      "entry_methods": {
+        "immediate": {
+          "signals": 2,
+          "consecutive_entries": 2,
+          "before_50pct_entries": 0,
+          "target_first": 0,
+          "stop_first": 2,
+          "ambiguous": 0,
+          "neither": 0,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 0,
+          "paired_immediate_target_first": 0,
+          "paired_immediate_stop_first": 0,
+          "early_entries": 1,
+          "late_entries": 1,
+          "median_delay_minutes": 0.0
+        },
+        "pullback_recovery": {
+          "signals": 2,
+          "consecutive_entries": 2,
+          "before_50pct_entries": 0,
+          "target_first": 0,
+          "stop_first": 1,
+          "ambiguous": 0,
+          "neither": 1,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 2,
+          "paired_immediate_target_first": 0,
+          "paired_immediate_stop_first": 2,
+          "early_entries": 1,
+          "late_entries": 1,
+          "median_delay_minutes": 7.5
+        },
+        "delayed_breakout": {
+          "signals": 0,
+          "consecutive_entries": 0,
+          "before_50pct_entries": 0,
+          "target_first": 0,
+          "stop_first": 0,
+          "ambiguous": 0,
+          "neither": 0,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 0,
+          "paired_immediate_target_first": 0,
+          "paired_immediate_stop_first": 0,
+          "early_entries": 0,
+          "late_entries": 0,
+          "median_delay_minutes": null
+        }
+      },
       "alert_features": {
         "premarket_alerts": 1,
         "five_minute_turnover_ge_100k": 2,
@@ -357,6 +463,59 @@
           "median_maximum_adverse_pct": -20.11
         }
       },
+      "entry_methods": {
+        "immediate": {
+          "signals": 180,
+          "consecutive_entries": 176,
+          "before_50pct_entries": 0,
+          "target_first": 18,
+          "stop_first": 94,
+          "ambiguous": 5,
+          "neither": 59,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 0,
+          "paired_immediate_target_first": 0,
+          "paired_immediate_stop_first": 0,
+          "early_entries": 88,
+          "late_entries": 88,
+          "median_delay_minutes": 0.0
+        },
+        "pullback_recovery": {
+          "signals": 89,
+          "consecutive_entries": 87,
+          "before_50pct_entries": 0,
+          "target_first": 21,
+          "stop_first": 45,
+          "ambiguous": 0,
+          "neither": 21,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 86,
+          "paired_immediate_target_first": 13,
+          "paired_immediate_stop_first": 62,
+          "early_entries": 46,
+          "late_entries": 41,
+          "median_delay_minutes": 10.0
+        },
+        "delayed_breakout": {
+          "signals": 58,
+          "consecutive_entries": 58,
+          "before_50pct_entries": 0,
+          "target_first": 8,
+          "stop_first": 42,
+          "ambiguous": 0,
+          "neither": 8,
+          "before_50pct_target_first": 0,
+          "before_50pct_stop_first": 0,
+          "paired_immediate_entries": 58,
+          "paired_immediate_target_first": 11,
+          "paired_immediate_stop_first": 31,
+          "early_entries": 37,
+          "late_entries": 21,
+          "median_delay_minutes": 7.0
+        }
+      },
       "alert_features": {
         "premarket_alerts": 40,
         "five_minute_turnover_ge_100k": 73,
@@ -404,6 +563,21 @@
       "label": "+10% 이후 5분 +8%"
     }
   ],
+  "entry_method_labels": [
+    {
+      "key": "immediate",
+      "label": "첫 +20% 직후"
+    },
+    {
+      "key": "pullback_recovery",
+      "label": "5% 눌림 후 2분 연속 회복"
+    },
+    {
+      "key": "delayed_breakout",
+      "label": "3분 관찰 후 종가 고점 1% 돌파"
+    }
+  ],
+  "entry_method_definition": "For winners, start with first +20% close before first +50% high; for controls, first +20% close. Alternative entry signal must occur within 20 clock minutes of watch. Entry assumes the next consecutive one-minute open. Outcomes are +10% high versus -5% low over 30 minutes after entry. Winner outcomes include entries after +50%; before_50pct_entries is reported separately. No fees, spread, slippage or real fill check.",
   "continuation_definition": "First close-confirmed alert, consecutive next-minute open strictly before +50% for winners; within 30 minutes, which is observed first: +10% high or -5% low? Same-minute both is ambiguous. Fees, spread and slippage excluded.",
   "limitations": [
     "급등 사례는 정규장 일봉에서 사후 선정한 455건이며 50% 도달 전에만 신호를 셉니다.",
@@ -411,6 +585,8 @@
     "첫 관측 분봉에서 이미 50%에 도달한 사례는 이후 신호로 포착할 수 없습니다.",
     "분봉 종가 신호와 연속된 다음 분봉은 실제 호가·체결 가능성을 보장하지 않습니다.",
     "진입 후 +10% 목표와 -5% 손절의 선후는 분봉 고가·저가로만 계산했습니다. 같은 봉에서 둘 다 닿으면 순서를 알 수 없어 미확정으로 분류했습니다. 수수료와 호가 간격은 제외했습니다.",
+    "새 진입 방식은 같은 30거래일에서 탐색한 가설입니다. 대조군 200건은 전체 후보군이 아니며, 급등 전 진입 여부는 사후에만 알 수 있습니다.",
+    "30분 결과는 16:00 이전에 관측된 분봉만 사용합니다. 거래가 없는 분과 누락된 분봉을 구별하지 못하며, 실제 체결 가능한 호가를 알 수 없습니다.",
     "같은 30거래일에서 찾은 규칙은 별도 기간과 실시간 모의 투자로 검증해야 합니다."
   ]
 }

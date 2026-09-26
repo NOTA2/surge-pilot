@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from surgepilot.pattern_study import _continuation, _signals
+from surgepilot.pattern_study import _continuation, _entry_signals, _signals
 
 
 class PatternStudyTests(unittest.TestCase):
@@ -38,6 +38,25 @@ class PatternStudyTests(unittest.TestCase):
         self.assertEqual(_continuation(bars, opens_lows, 0, 2)["outcome"], "ambiguous")
         opens_lows[1] = (opens_lows[1][0], Decimal("10"), Decimal("9.8"))
         self.assertEqual(_continuation(bars, opens_lows, 0, 2)["outcome"], "target")
+
+    def test_entry_methods_wait_for_confirmed_close(self):
+        start = datetime(2026, 9, 21, 4, 0, tzinfo=ZoneInfo("America/New_York"))
+        prices = (Decimal("12"), Decimal("11.3"), Decimal("11.4"),
+                  Decimal("11.6"), Decimal("12.2"))
+        bars = [(start + timedelta(minutes=i), price, price, 100)
+                for i, price in enumerate(prices)]
+        self.assertEqual(_entry_signals(bars[:2], 0), {"immediate": 0})
+        self.assertEqual(_entry_signals(bars, 0),
+                         {"immediate": 0, "pullback_recovery": 3,
+                          "delayed_breakout": 4})
+
+    def test_entry_methods_do_not_bridge_sparse_minutes(self):
+        start = datetime(2026, 9, 21, 4, 0, tzinfo=ZoneInfo("America/New_York"))
+        stamps = (0, 1, 3, 4, 5)
+        prices = ("12", "11.3", "11.4", "11.6", "12.2")
+        bars = [(start + timedelta(minutes=minute), Decimal(price), Decimal(price), 100)
+                for minute, price in zip(stamps, prices)]
+        self.assertEqual(_entry_signals(bars, 0)["pullback_recovery"], 4)
 
 
 if __name__ == "__main__":

@@ -180,5 +180,12 @@ function showPattern(data) {
     `<table><thead><tr><th>신호</th><th>사례</th><th>다음 봉 진입</th><th>+10% 먼저</th><th>-5% 먼저</th><th>같은 봉</th><th>미도달</th><th>30분 최저 하락폭 중앙값</th></tr></thead><tbody>`+
     tradeRules.flatMap(key=>['winners','near_miss'].map(group=>{const c=groups[group].continuation[key];return `<tr><td>${escapeHtml(labels[key])}</td><td>${group==='winners'?'50% 급등':'20~49% 정체'}</td><td>${escapeHtml(c.entries)}</td><td>${escapeHtml(c.target_first)}</td><td>${escapeHtml(c.stop_first)}</td><td>${escapeHtml(c.ambiguous)}</td><td>${escapeHtml(c.neither)}</td><td>${escapeHtml(c.median_maximum_adverse_pct)}%</td></tr>`;})).join('')+
     `</tbody></table>`);
+  if (Array.isArray(data.entry_method_labels) && groups.winners.entry_methods) {
+    $('study-pattern').insertAdjacentHTML('beforeend', `<h3>새 진입 방식 · 동일 +20% 감시 후보</h3>`+
+      `<p class="study-note">첫 +20% 종가부터 20분 안에 조건을 확인하고 다음 연속 1분봉 시가로 진입한다고 가정합니다. 급등주에서 +50% 이후 들어간 경우도 목표·손절 결과에 포함되므로 “50% 전 진입”을 따로 보세요. 분봉 내 목표·손절 순서, 호가·체결 가능성은 알 수 없습니다.</p>`+
+      `<table><thead><tr><th>진입 방식</th><th>사례</th><th>신호</th><th>다음 봉 진입</th><th>50% 전 진입</th><th>50% 전 목표 / 손절</th><th>감시 후 지연 중앙값</th><th>+10% 먼저</th><th>-5% 먼저</th><th>동일 후보 즉시 진입 목표 / 손절</th><th>같은 봉</th><th>미도달</th></tr></thead><tbody>`+
+      data.entry_method_labels.flatMap(({key,label})=>['winners','near_miss'].map(group=>{const m=groups[group].entry_methods[key];return `<tr><td>${escapeHtml(label)}</td><td>${group==='winners'?'50% 급등':'20~49% 정체'}</td><td>${escapeHtml(m.signals)}</td><td>${escapeHtml(m.consecutive_entries)}</td><td>${group==='winners'?escapeHtml(m.before_50pct_entries):'—'}</td><td>${group==='winners'?`${escapeHtml(m.before_50pct_target_first)} / ${escapeHtml(m.before_50pct_stop_first)}`:'—'}</td><td>${escapeHtml(m.median_delay_minutes ?? '—')}분</td><td>${escapeHtml(m.target_first)}</td><td>${escapeHtml(m.stop_first)}</td><td>${key==='immediate'?'—':`${escapeHtml(m.paired_immediate_target_first)} / ${escapeHtml(m.paired_immediate_stop_first)}`}</td><td>${escapeHtml(m.ambiguous)}</td><td>${escapeHtml(m.neither)}</td></tr>`;})).join('')+
+      `</tbody></table><p class="study-note">이 표본에서는 두 대안 모두 급등 전 진입 수가 줄었습니다. 동일 후보의 즉시 진입 결과와 비교해도 개선 근거가 없어 자동 매수 규칙으로 채택하지 않습니다. 대조군은 전체 시장이 아닌 표본입니다.</p>`);
+  }
 }
 fetch('./pattern-summary.json').then((response)=>{if(!response.ok)throw Error('패턴 비교 없음');return response.json();}).then(showPattern).catch(()=>{$('study-pattern').textContent='패턴 비교 결과를 불러올 수 없습니다.';});
