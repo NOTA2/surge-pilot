@@ -21,13 +21,15 @@ WEB = ROOT / "local"
 REPORT = ROOT / "reports/private/latest.html"
 SUMMARY = ROOT / "reports/private/latest.json"
 PATTERN = ROOT / "reports/private/pattern.html"
+DISCOVERY = ROOT / "reports/private/discovery.html"
 CREDENTIALS = Path.home() / "Downloads/토스 api key"
 NY = ZoneInfo("America/New_York")
 ALLOWED_FILES = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
                  "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
                  "/style.css": (WEB / "style.css", "text/css; charset=utf-8"),
                  "/report": (REPORT, "text/html; charset=utf-8"),
-                 "/pattern": (PATTERN, "text/html; charset=utf-8")}
+                 "/pattern": (PATTERN, "text/html; charset=utf-8"),
+                 "/discovery": (DISCOVERY, "text/html; charset=utf-8")}
 
 
 def _now() -> str:
@@ -70,15 +72,17 @@ class Controller:
             return self.status.copy()
 
     def start(self, action: str, values: dict):
-        if action not in ("report", "premarket", "patterns"):
+        if action not in ("report", "premarket", "patterns", "discovery", "discovery_collect"):
             raise ValueError("알 수 없는 실행 작업입니다")
-        if action == "premarket" and not CREDENTIALS.is_file():
+        if action in ("premarket", "discovery_collect") and not CREDENTIALS.is_file():
             raise ValueError("다운로드 폴더에서 토스 api key 파일을 찾지 못했습니다")
         with self.lock:
             if self.status["phase"] == "running":
                 raise RuntimeError("이미 실행 중인 작업이 있습니다")
             self.status = {"phase": "running", "action": action,
                            "message": ("장전 분봉 수집 준비 중" if action == "premarket" else
+                                       "누락된 발견 후보 수집 준비 중" if action == "discovery_collect" else
+                                       "발견 규칙 검증 준비 중" if action == "discovery" else
                                        "패턴 비교 준비 중" if action == "patterns" else "보고서 계산 준비 중"),
                            "started_at": _now(), "finished_at": None,
                            "report_version": self._report_version()}
@@ -97,7 +101,9 @@ class Controller:
             line = line.strip()
             # Keep credentials and unexpected upstream response bodies out of the UI.
             if line.startswith(("premarket pairs=", "premarket scanned", "premarket collection stopped",
-                                "confirmed_recall=", "HTML:", "prior_20pct:")):
+                                "confirmed_recall=", "HTML:", "prior_20pct:",
+                                "near_miss_all controls=", "near_miss_all controls scanned",
+                                "discovery before50=")):
                 with self.lock:
                     if self.status["phase"] == "running":
                         self.status["message"] = line[:240]
@@ -115,6 +121,21 @@ class Controller:
                 with self.lock:
                     if self.status["phase"] == "running":
                         self.status.update(phase="completed", message="패턴 비교 완료 · 아래 결과를 확인하세요",
+                                           finished_at=_now(), report_version=self._report_version())
+                return
+            if action in ("discovery", "discovery_collect"):
+                if action == "discovery_collect":
+                    code = self._command("surgepilot.matched_controls", [
+                        "--kind", "near_miss_all", "--credentials-file", str(CREDENTIALS),
+                        "--workers", "4", "--rate", "6"])
+                    if code != 0:
+                        raise RuntimeError("발견 후보 분봉 수집이 실패했습니다. 서버 터미널을 확인하세요")
+                code = self._command("surgepilot.discovery_study", [])
+                if code != 0:
+                    raise RuntimeError("발견 규칙 검증이 실패했습니다. 서버 터미널을 확인하세요")
+                with self.lock:
+                    if self.status["phase"] == "running":
+                        self.status.update(phase="completed", message="발견 규칙 검증 완료 · 아래 결과를 확인하세요",
                                            finished_at=_now(), report_version=self._report_version())
                 return
             if action == "premarket":

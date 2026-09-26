@@ -31,8 +31,13 @@ function showStatus(status) {
   $('run-report').disabled = status.phase === 'running';
   $('run-premarket').disabled = status.phase === 'running';
   $('run-patterns').disabled = status.phase === 'running';
+  $('run-discovery').disabled = status.phase === 'running';
+  $('run-discovery-collect').disabled = status.phase === 'running';
   if (status.action === 'patterns' && status.phase === 'completed' && lastPhase !== 'completed') {
     $('pattern-frame').src = `/pattern?v=${Date.now()}`;
+  }
+  if (['discovery','discovery_collect'].includes(status.action) && status.phase === 'completed' && lastPhase !== 'completed') {
+    $('discovery-frame').src = `/discovery?v=${Date.now()}`;
   }
   if (status.report_version && (status.report_version !== lastVersion || status.phase !== lastPhase && status.phase === 'completed')) {
     lastVersion = status.report_version;
@@ -88,6 +93,8 @@ async function run(action) {
 $('research-form').addEventListener('submit', event => {event.preventDefault(); run('report');});
 $('run-premarket').addEventListener('click', () => run('premarket'));
 $('run-patterns').addEventListener('click', () => run('patterns'));
+$('run-discovery').addEventListener('click', () => run('discovery'));
+$('run-discovery-collect').addEventListener('click', () => run('discovery_collect'));
 $('check-ip').addEventListener('click', checkIP);
 $('cancel').addEventListener('click', async () => {
   try { showStatus(await postJSON('/api/cancel', {})); }

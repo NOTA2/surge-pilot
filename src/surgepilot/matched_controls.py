@@ -14,13 +14,41 @@ from .toss import TossError
 NY = ZoneInfo("America/New_York")
 
 
+def select_all_near_misses(db_path: str) -> list[dict]:
+    """Every daily +20% high that stays below both +50% event definitions."""
+    database = connect_database(db_path)
+    sessions = [row[0] for row in database.execute("SELECT date FROM sessions ORDER BY ordinal")]
+    days = {}
+    for symbol, date, opening, high, close in database.execute(
+            "SELECT symbol,date,open,high,close FROM daily"):
+        days.setdefault(date, {})[symbol] = (Decimal(opening), Decimal(high), Decimal(close))
+    dates = sorted(days)
+    result = []
+    for date in sessions:
+        previous = max((old for old in dates if old < date), default=None)
+        prior_rows = days.get(previous, {})
+        for symbol, (opening, high, _) in days.get(date, {}).items():
+            before = prior_rows.get(symbol)
+            if not before or before[2] <= 0:
+                continue
+            prior_close = before[2]
+            if (high >= prior_close * Decimal("1.2")
+                    and high < prior_close * Decimal("1.5")
+                    and high < opening * Decimal("1.5")):
+                result.append({"symbol": symbol, "date": date, "matched_winner": ""})
+    database.close()
+    return sorted(result, key=lambda item: (item["date"], item["symbol"]))
+
+
 def select_controls(db_path: str, limit: int = 200,
                     kind: str = "ordinary") -> list[dict]:
     """Match sampled 50% movers on date, prior close, and prior turnover."""
+    if kind == "near_miss_all":
+        return select_all_near_misses(db_path)
     if limit < 1:
         raise ValueError("limit must be positive")
     if kind not in ("ordinary", "near_miss"):
-        raise ValueError("kind must be ordinary or near_miss")
+        raise ValueError("kind must be ordinary, near_miss or near_miss_all")
     selection = selection_summary(db_path)
     winners = sorted(selection["winners"], key=lambda item: (item["date"], item["symbol"]))
     database = connect_database(db_path)
@@ -84,15 +112,22 @@ def collect_controls(credentials_file: str, db_path: str, limit: int = 200,
                      workers: int = 2, rate: float = 2, kind: str = "ordinary"):
     controls = select_controls(db_path, limit, kind)
     database = connect_database(db_path)
-    table = "control_log" if kind == "ordinary" else "near_miss_log"
+    table = {"ordinary": "control_log", "near_miss": "near_miss_log",
+             "near_miss_all": "near_miss_all_log"}[kind]
     database.execute(f"""CREATE TABLE IF NOT EXISTS {table}(
         symbol TEXT NOT NULL, date TEXT NOT NULL, status TEXT NOT NULL, bars INTEGER NOT NULL,
         matched_winner TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(symbol,date))""")
     done = set(database.execute(f"SELECT symbol,date FROM {table} WHERE status='ok'"))
+    if kind == "near_miss_all" and database.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='near_miss_log'").fetchone():
+        done.update(database.execute("SELECT symbol,date FROM near_miss_log WHERE status='ok'"))
     todo = [item for item in controls if (item["symbol"], item["date"]) not in done]
+    print(f"{kind} controls={len(controls)} remaining={len(todo)}", flush=True)
+    if not todo:
+        database.close()
+        return
     client = client_from_file(credentials_file)
     client._authenticate()
-    print(f"{kind} controls={len(controls)} remaining={len(todo)}", flush=True)
     limiter = RateLimiter(rate)
 
     def fetch(item):
@@ -144,7 +179,7 @@ def main():
     parser = argparse.ArgumentParser(description="Matched non-mover control study")
     parser.add_argument("--db", default="data/private/research.sqlite")
     parser.add_argument("--limit", type=int, default=200)
-    parser.add_argument("--kind", choices=["ordinary", "near_miss"], default="ordinary")
+    parser.add_argument("--kind", choices=["ordinary", "near_miss", "near_miss_all"], default="ordinary")
     parser.add_argument("--credentials-file")
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--rate", type=float, default=2)
@@ -154,7 +189,7 @@ def main():
     else:
         controls = select_controls(args.db, args.limit, args.kind)
         print(f"{args.kind} controls selected={len(controls)}")
-        for key in ("prior_close", "prior_turnover"):
+        for key in ("prior_close", "prior_turnover") if args.kind != "near_miss_all" else ():
             import statistics
             ratios = [item[key] / max(item["winner_" + key], 0.000001) for item in controls]
             print(f"median {key} ratio={statistics.median(ratios):.2f}")
