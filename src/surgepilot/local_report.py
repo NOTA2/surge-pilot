@@ -26,15 +26,16 @@ def first_signals(bars: list[dict], lookbacks: tuple[int, ...], rises: tuple[Dec
     found = {}
     fillable = {}
     for lookback in lookbacks:
-        cursor = -1
+        cursor = 0
         for index, bar in enumerate(bars):
             cutoff = bar["time"] - timedelta(minutes=lookback)
-            while cursor + 1 < index and bars[cursor + 1]["time"] <= cutoff:
+            while cursor < index and bars[cursor]["time"] < cutoff:
                 cursor += 1
-            if cursor < 0 or bar["close"] < min_price or bar["volume"] < min_bar_volume:
+            if cursor >= index or bar["close"] < min_price or bar["volume"] < min_bar_volume:
                 continue
-            prior = bars[cursor]["close"]
-            if prior <= 0:
+            prior = min((bars[i]["close"] for i in range(cursor, index)
+                         if bars[i]["close"] > 0), default=None)
+            if prior is None:
                 continue
             rise = (bar["close"] / prior - 1) * 100
             for threshold in rises:
@@ -254,7 +255,8 @@ def public_summary(result: dict) -> dict:
     recall = result["recall"]
     return {"generated_at": result["generated_at"], "period": result["period"],
             "strategy": {key: result["strategy"][key] for key in
-                         ("lookback_minutes", "rise_pct", "trail_pct", "stop_pct")},
+                         ("lookback_minutes", "rise_pct", "trail_pct", "stop_pct", "min_price")},
+            "signal_definition": "Rise from the lowest observed close within the preceding N minutes; no earlier price is carried into a sparse window.",
             "coverage": recall["coverage"], "selected": recall["selected"],
             "grid": recall["grid"], "top100": result["top_prior"]["summary"]}
 

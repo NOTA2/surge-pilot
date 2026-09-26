@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-25T03:38:07.491557-04:00",
+  "generated_at": "2026-09-26T03:39:09.742358-04:00",
   "period": [
     "2026-08-13",
     "2026-09-24"
@@ -13,93 +13,93 @@
     "minute_covered": 454,
     "near_full": 436,
     "reached_50pct": 454,
-    "catchable_after_first_minute": 283,
-    "early_signals": 133
+    "catchable_after_first_minute": 320,
+    "early_signals": 118
   },
   "top100": {
     "pairs": 3000,
     "minute_covered": 2999,
     "near_full": 2999,
-    "trades": 7,
-    "signals": 7,
-    "days_with_trade": 7,
-    "net_return_pct": 6.7571,
-    "max_drawdown_pct": 5.1112,
-    "win_rate_pct": 57.14
+    "trades": 8,
+    "signals": 8,
+    "days_with_trade": 8,
+    "net_return_pct": -2.2914,
+    "max_drawdown_pct": 5.1515,
+    "win_rate_pct": 37.5
   },
   "liquidity": [
     {
       "threshold_usd": 0,
-      "winners_trades": 88,
-      "winners_early_signal_events": 133,
-      "winners_early_bought_events": 25,
+      "winners_trades": 89,
+      "winners_early_signal_events": 118,
+      "winners_early_bought_events": 23,
       "winners_baseline_buys_missed": 0,
       "winners_median_entry_delay_minutes": 0.0,
-      "top100_trades": 7,
-      "top100_return_pct": 6.7571
+      "top100_trades": 8,
+      "top100_return_pct": -2.2914
     },
     {
       "threshold_usd": 100000,
-      "winners_trades": 88,
-      "winners_early_signal_events": 124,
-      "winners_early_bought_events": 25,
-      "winners_baseline_buys_missed": 8,
+      "winners_trades": 89,
+      "winners_early_signal_events": 109,
+      "winners_early_bought_events": 19,
+      "winners_baseline_buys_missed": 10,
       "winners_median_entry_delay_minutes": 0.0,
-      "top100_trades": 7,
-      "top100_return_pct": 6.7571
+      "top100_trades": 8,
+      "top100_return_pct": -2.2914
     },
     {
       "threshold_usd": 500000,
-      "winners_trades": 88,
-      "winners_early_signal_events": 99,
-      "winners_early_bought_events": 24,
-      "winners_baseline_buys_missed": 18,
+      "winners_trades": 89,
+      "winners_early_signal_events": 85,
+      "winners_early_bought_events": 14,
+      "winners_baseline_buys_missed": 22,
       "winners_median_entry_delay_minutes": 0.0,
-      "top100_trades": 7,
-      "top100_return_pct": 6.7571
+      "top100_trades": 8,
+      "top100_return_pct": -2.2914
     },
     {
       "threshold_usd": 1000000,
-      "winners_trades": 88,
-      "winners_early_signal_events": 82,
-      "winners_early_bought_events": 17,
-      "winners_baseline_buys_missed": 20,
+      "winners_trades": 89,
+      "winners_early_signal_events": 69,
+      "winners_early_bought_events": 11,
+      "winners_baseline_buys_missed": 25,
       "winners_median_entry_delay_minutes": 0.0,
-      "top100_trades": 7,
-      "top100_return_pct": 6.7571
+      "top100_trades": 8,
+      "top100_return_pct": -2.2914
     },
     {
       "threshold_usd": 5000000,
-      "winners_trades": 86,
-      "winners_early_signal_events": 28,
-      "winners_early_bought_events": 7,
-      "winners_baseline_buys_missed": 36,
+      "winners_trades": 87,
+      "winners_early_signal_events": 22,
+      "winners_early_bought_events": 4,
+      "winners_baseline_buys_missed": 39,
       "winners_median_entry_delay_minutes": 0.0,
-      "top100_trades": 6,
-      "top100_return_pct": 7.8883
+      "top100_trades": 7,
+      "top100_return_pct": -1.2571
     }
   ],
   "costs": [
     {
       "slippage_bps_each_side": 15,
       "fee_bps_each_side": 10,
-      "trades": 7,
-      "net_return_pct": 6.7571,
-      "max_drawdown_pct": 5.1112
+      "trades": 8,
+      "net_return_pct": -2.2914,
+      "max_drawdown_pct": 5.1515
     },
     {
       "slippage_bps_each_side": 50,
       "fee_bps_each_side": 10,
-      "trades": 7,
-      "net_return_pct": 4.8228,
-      "max_drawdown_pct": 5.5248
+      "trades": 8,
+      "net_return_pct": -4.0747,
+      "max_drawdown_pct": 5.4647
     },
     {
       "slippage_bps_each_side": 100,
       "fee_bps_each_side": 10,
-      "trades": 7,
-      "net_return_pct": 2.2028,
-      "max_drawdown_pct": 6.1089
+      "trades": 8,
+      "net_return_pct": -6.4226,
+      "max_drawdown_pct": 6.6311
     }
   ]
 }

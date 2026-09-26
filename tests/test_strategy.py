@@ -11,11 +11,18 @@ NY = ZoneInfo("America/New_York")
 
 
 class StrategyTests(unittest.TestCase):
-    def test_signal_uses_only_observations_at_or_before_lookback(self):
+    def test_signal_uses_observations_within_lookback(self):
         start = datetime(2026, 9, 21, 9, 30, tzinfo=NY)
         points = [(start, Decimal("10")), (start + timedelta(minutes=4), Decimal("11"))]
-        self.assertIsNone(rise_percent(points, points[-1][0], 5))
+        self.assertEqual(rise_percent(points, points[-1][0], 5), Decimal("10.0"))
         points.append((start + timedelta(minutes=5), Decimal("12")))
+        self.assertEqual(rise_percent(points, points[-1][0], 5), Decimal("20"))
+
+    def test_signal_requires_a_price_inside_the_window(self):
+        start = datetime(2026, 9, 21, 9, 30, tzinfo=NY)
+        points = [(start, Decimal("10")), (start + timedelta(minutes=10), Decimal("12"))]
+        self.assertIsNone(rise_percent(points, points[-1][0], 5))
+        points = [(start, Decimal("10")), (start + timedelta(minutes=2), Decimal("12"))]
         self.assertEqual(rise_percent(points, points[-1][0], 5), Decimal("20"))
 
     def test_entry_occurs_after_signal_and_exit_before_close(self):

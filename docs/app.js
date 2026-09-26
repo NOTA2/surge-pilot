@@ -149,8 +149,8 @@ function showRecall(data) {
   const c = data.coverage, selected = data.selected, strategy = data.strategy;
   const rows = [...data.grid].sort((a,b)=>b.all_event_recall_pct-a.all_event_recall_pct || a.lookback_minutes-b.lookback_minutes || a.rise_pct-b.rise_pct);
   const warning = c.events_with_premarket_bars < c.raw_50pct_events ?
-    `<p class="study-recall-warning">장전 분봉 확보 ${escapeHtml(c.events_with_premarket_bars)}/${escapeHtml(c.raw_50pct_events)}건. 개장 전에 이미 50% 상승한 종목의 사전 포착률은 아직 평가되지 않았습니다.</p>` : '';
-  $('study-recall').innerHTML = `<h3>거래대금 조건 없는 포착률 실험 · ${escapeHtml(strategy.lookback_minutes)}분 / +${escapeHtml(strategy.rise_pct)}%</h3>`+
+    `<p class="study-recall-warning">장전 분봉 확보 ${escapeHtml(c.events_with_premarket_bars)}/${escapeHtml(c.raw_50pct_events)}건. 나머지 사례의 개장 전 신호는 평가할 수 없습니다.</p>` : '';
+  $('study-recall').innerHTML = `<h3>거래대금 조건 없는 포착률 실험 · ${escapeHtml(strategy.lookback_minutes)}분 / +${escapeHtml(strategy.rise_pct)}% · 최저 $${escapeHtml(strategy.min_price ?? '1')}</h3>`+
     `<p class="study-note">확인된 사전 신호 ${escapeHtml(selected.signals_before_50pct)}/${escapeHtml(c.raw_50pct_events)}건 (${rate(selected.all_event_recall_pct)}). 저장된 첫 분봉 이후 50% 도달한 ${escapeHtml(c.catchable_after_first_bar)}건 기준으로는 ${rate(selected.recall_pct)}입니다. 다음 분봉 매수 가능 ${escapeHtml(selected.fills_before_50pct)}건. 장 시작 시 이미 +50%인 사례 ${escapeHtml(c.regular_open_gap_events)}건 중 개장 전 사전 신호 ${escapeHtml(selected.gap_signals_before_open)}건입니다.</p>`+
     warning+
     `<table><thead><tr><th>N</th><th>M</th><th>사전 신호</th><th>전체 사례 기준</th><th>관측 가능 기준</th><th>다음 봉 매수 가능</th></tr></thead><tbody>`+
@@ -159,3 +159,14 @@ function showRecall(data) {
 }
 
 fetch('./recall-summary.json').then((response)=>{if(!response.ok)throw Error('포착률 요약 없음');return response.json();}).then(showRecall).catch(()=>{$('study-recall').textContent='포착률 요약을 불러올 수 없습니다.';});
+
+function showPattern(data) {
+  if (!data?.groups?.winners || !Array.isArray(data.rules)) throw Error('패턴 비교 요약 형식이 아닙니다.');
+  const groups = data.groups;
+  $('study-pattern').innerHTML = `<h3>조기 포착 패턴 비교 · $${escapeHtml(data.minimum_signal_price_usd)} 이상</h3>`+
+    `<p class="study-note">50% 급등 ${escapeHtml(groups.winners.selected)}건 중 전일 종가 $1 미만 ${escapeHtml(groups.winners.prior_close_below_1usd)}건, 장전 50% 도달 ${escapeHtml(groups.winners.premarket_50pct)}건, 정규장 시작 때 이미 +50% ${escapeHtml(groups.winners.regular_open_gap_50pct)}건입니다. 일반 대조군 ${escapeHtml(groups.ordinary.selected)}건과 20~49%에서 멈춘 대조군 ${escapeHtml(groups.near_miss.selected)}건을 날짜·전일 가격·전일 거래대금으로 맞춰 비교했습니다.</p>`+
+    `<table><thead><tr><th>관측 규칙</th><th>급등주 사전 신호</th><th>다음 봉 관측</th><th>50%까지 선행 중앙값</th><th>일반 대조군 신호</th><th>20~49% 대조군 신호</th></tr></thead><tbody>`+
+    data.rules.map(({key,label})=>{const w=groups.winners.rules[key],o=groups.ordinary.rules[key],n=groups.near_miss.rules[key];return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(w.alerts)}/${escapeHtml(groups.winners.selected)}</td><td>${escapeHtml(w.next_minute_before_50pct)}</td><td>${escapeHtml(w.median_lead_minutes ?? '—')}분</td><td>${escapeHtml(o.alerts)}/${escapeHtml(groups.ordinary.selected)}</td><td>${escapeHtml(n.alerts)}/${escapeHtml(groups.near_miss.selected)}</td></tr>`;}).join('')+
+    `</tbody></table><p class="study-note">전일 종가 +20%는 감시 후보일 뿐 매수 신호가 아닙니다. 20~49% 대조군은 의도적으로 어려운 사례를 모은 표본이며, 이 표로 전체 시장 오탐률이나 실거래 수익률을 계산할 수 없습니다.</p>`;
+}
+fetch('./pattern-summary.json').then((response)=>{if(!response.ok)throw Error('패턴 비교 없음');return response.json();}).then(showPattern).catch(()=>{$('study-pattern').textContent='패턴 비교 결과를 불러올 수 없습니다.';});

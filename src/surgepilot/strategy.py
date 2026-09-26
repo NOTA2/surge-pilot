@@ -36,12 +36,17 @@ class StrategyConfig:
 
 
 def rise_percent(history: list[tuple[datetime, Decimal]], now: datetime, lookback_minutes: int) -> Decimal | None:
-    """Use the most recent observation at/before t-N, never a future observation."""
+    """Rise from the lowest observed close within the preceding N minutes."""
     cutoff = now - timedelta(minutes=lookback_minutes)
-    earlier = next((price for time, price in reversed(history) if time <= cutoff), None)
-    if earlier is None or earlier <= 0:
+    earlier = []
+    for observed_at, price in reversed(history[:-1]):
+        if observed_at < cutoff:
+            break
+        if price > 0:
+            earlier.append(price)
+    if not earlier:
         return None
-    return (history[-1][1] / earlier - 1) * 100
+    return (history[-1][1] / min(earlier) - 1) * 100
 
 
 def stop_reason(price: Decimal, entry: Decimal, peak: Decimal, config: StrategyConfig) -> str | None:

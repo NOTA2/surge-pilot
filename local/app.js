@@ -30,6 +30,10 @@ function showStatus(status) {
   $('cancel').hidden = status.phase !== 'running';
   $('run-report').disabled = status.phase === 'running';
   $('run-premarket').disabled = status.phase === 'running';
+  $('run-patterns').disabled = status.phase === 'running';
+  if (status.action === 'patterns' && status.phase === 'completed' && lastPhase !== 'completed') {
+    $('pattern-frame').src = `/pattern?v=${Date.now()}`;
+  }
   if (status.report_version && (status.report_version !== lastVersion || status.phase !== lastPhase && status.phase === 'completed')) {
     lastVersion = status.report_version;
     $('report-frame').src = `/report?v=${status.report_version}`;
@@ -83,6 +87,7 @@ async function run(action) {
 
 $('research-form').addEventListener('submit', event => {event.preventDefault(); run('report');});
 $('run-premarket').addEventListener('click', () => run('premarket'));
+$('run-patterns').addEventListener('click', () => run('patterns'));
 $('check-ip').addEventListener('click', checkIP);
 $('cancel').addEventListener('click', async () => {
   try { showStatus(await postJSON('/api/cancel', {})); }

@@ -1,0 +1,306 @@
+{
+  "generated_at": "2026-09-26T03:47:39.122509-04:00",
+  "period": [
+    "2026-08-13",
+    "2026-09-24"
+  ],
+  "half_split_at": "2026-09-03",
+  "minimum_signal_price_usd": 0.1,
+  "definition": "Close-confirmed alerts from 04:00-15:59 New York time; winners count only before first observed +50% high; next-minute means a consecutive 1-minute bar before that high.",
+  "groups": {
+    "winners": {
+      "selected": 455,
+      "with_minute_bars": 454,
+      "catchable_after_first_bar": 321,
+      "first_bar_already_50pct": 133,
+      "premarket_50pct": 239,
+      "regular_open_gap_50pct": 168,
+      "prior_close_below_1usd": 242,
+      "rules": {
+        "2m_5pct": {
+          "alerts": 285,
+          "next_minute_before_50pct": 266,
+          "median_lead_minutes": 66.0,
+          "regular_open_gap_alerts_before_open": 37,
+          "early_half_alerts": 134,
+          "late_half_alerts": 151
+        },
+        "3m_3pct": {
+          "alerts": 292,
+          "next_minute_before_50pct": 278,
+          "median_lead_minutes": 143.5,
+          "regular_open_gap_alerts_before_open": 40,
+          "early_half_alerts": 136,
+          "late_half_alerts": 156
+        },
+        "5m_8pct": {
+          "alerts": 277,
+          "next_minute_before_50pct": 252,
+          "median_lead_minutes": 34.0,
+          "regular_open_gap_alerts_before_open": 35,
+          "early_half_alerts": 130,
+          "late_half_alerts": 147
+        },
+        "15m_20pct": {
+          "alerts": 196,
+          "next_minute_before_50pct": 154,
+          "median_lead_minutes": 10.0,
+          "regular_open_gap_alerts_before_open": 25,
+          "early_half_alerts": 94,
+          "late_half_alerts": 102
+        },
+        "prior_10pct": {
+          "alerts": 304,
+          "next_minute_before_50pct": 286,
+          "median_lead_minutes": 53.0,
+          "regular_open_gap_alerts_before_open": 46,
+          "early_half_alerts": 147,
+          "late_half_alerts": 157
+        },
+        "prior_20pct": {
+          "alerts": 294,
+          "next_minute_before_50pct": 266,
+          "median_lead_minutes": 20.0,
+          "regular_open_gap_alerts_before_open": 42,
+          "early_half_alerts": 140,
+          "late_half_alerts": 154
+        },
+        "prior_20pct_and_3m_3pct": {
+          "alerts": 278,
+          "next_minute_before_50pct": 253,
+          "median_lead_minutes": 20.5,
+          "regular_open_gap_alerts_before_open": 36,
+          "early_half_alerts": 129,
+          "late_half_alerts": 149
+        },
+        "prior_20pct_and_5m_8pct": {
+          "alerts": 262,
+          "next_minute_before_50pct": 229,
+          "median_lead_minutes": 14.0,
+          "regular_open_gap_alerts_before_open": 34,
+          "early_half_alerts": 122,
+          "late_half_alerts": 140
+        },
+        "prior_10pct_and_5m_8pct": {
+          "alerts": 272,
+          "next_minute_before_50pct": 246,
+          "median_lead_minutes": 22.0,
+          "regular_open_gap_alerts_before_open": 34,
+          "early_half_alerts": 128,
+          "late_half_alerts": 144
+        }
+      }
+    },
+    "ordinary": {
+      "selected": 200,
+      "with_minute_bars": 199,
+      "catchable_after_first_bar": 0,
+      "first_bar_already_50pct": 0,
+      "premarket_50pct": 0,
+      "regular_open_gap_50pct": 0,
+      "prior_close_below_1usd": 104,
+      "rules": {
+        "2m_5pct": {
+          "alerts": 39,
+          "next_minute_before_50pct": 24,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 15,
+          "late_half_alerts": 24
+        },
+        "3m_3pct": {
+          "alerts": 82,
+          "next_minute_before_50pct": 69,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 29,
+          "late_half_alerts": 53
+        },
+        "5m_8pct": {
+          "alerts": 21,
+          "next_minute_before_50pct": 17,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 7,
+          "late_half_alerts": 14
+        },
+        "15m_20pct": {
+          "alerts": 2,
+          "next_minute_before_50pct": 2,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 0,
+          "late_half_alerts": 2
+        },
+        "prior_10pct": {
+          "alerts": 21,
+          "next_minute_before_50pct": 20,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 7,
+          "late_half_alerts": 14
+        },
+        "prior_20pct": {
+          "alerts": 2,
+          "next_minute_before_50pct": 2,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 1,
+          "late_half_alerts": 1
+        },
+        "prior_20pct_and_3m_3pct": {
+          "alerts": 2,
+          "next_minute_before_50pct": 2,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 1,
+          "late_half_alerts": 1
+        },
+        "prior_20pct_and_5m_8pct": {
+          "alerts": 1,
+          "next_minute_before_50pct": 1,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 0,
+          "late_half_alerts": 1
+        },
+        "prior_10pct_and_5m_8pct": {
+          "alerts": 7,
+          "next_minute_before_50pct": 7,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 2,
+          "late_half_alerts": 5
+        }
+      }
+    },
+    "near_miss": {
+      "selected": 200,
+      "with_minute_bars": 200,
+      "catchable_after_first_bar": 0,
+      "first_bar_already_50pct": 0,
+      "premarket_50pct": 0,
+      "regular_open_gap_50pct": 0,
+      "prior_close_below_1usd": 94,
+      "rules": {
+        "2m_5pct": {
+          "alerts": 163,
+          "next_minute_before_50pct": 159,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 82,
+          "late_half_alerts": 81
+        },
+        "3m_3pct": {
+          "alerts": 197,
+          "next_minute_before_50pct": 194,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 99,
+          "late_half_alerts": 98
+        },
+        "5m_8pct": {
+          "alerts": 139,
+          "next_minute_before_50pct": 132,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 72,
+          "late_half_alerts": 67
+        },
+        "15m_20pct": {
+          "alerts": 54,
+          "next_minute_before_50pct": 53,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 25,
+          "late_half_alerts": 29
+        },
+        "prior_10pct": {
+          "alerts": 199,
+          "next_minute_before_50pct": 199,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 100,
+          "late_half_alerts": 99
+        },
+        "prior_20pct": {
+          "alerts": 180,
+          "next_minute_before_50pct": 179,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 90,
+          "late_half_alerts": 90
+        },
+        "prior_20pct_and_3m_3pct": {
+          "alerts": 153,
+          "next_minute_before_50pct": 153,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 80,
+          "late_half_alerts": 73
+        },
+        "prior_20pct_and_5m_8pct": {
+          "alerts": 103,
+          "next_minute_before_50pct": 101,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 54,
+          "late_half_alerts": 49
+        },
+        "prior_10pct_and_5m_8pct": {
+          "alerts": 127,
+          "next_minute_before_50pct": 124,
+          "median_lead_minutes": null,
+          "regular_open_gap_alerts_before_open": 0,
+          "early_half_alerts": 66,
+          "late_half_alerts": 61
+        }
+      }
+    }
+  },
+  "rules": [
+    {
+      "key": "2m_5pct",
+      "label": "2분 +5%"
+    },
+    {
+      "key": "3m_3pct",
+      "label": "3분 +3%"
+    },
+    {
+      "key": "5m_8pct",
+      "label": "5분 +8%"
+    },
+    {
+      "key": "15m_20pct",
+      "label": "15분 +20%"
+    },
+    {
+      "key": "prior_10pct",
+      "label": "전일 종가 +10%"
+    },
+    {
+      "key": "prior_20pct",
+      "label": "전일 종가 +20%"
+    },
+    {
+      "key": "prior_20pct_and_3m_3pct",
+      "label": "+20% 이후 3분 +3%"
+    },
+    {
+      "key": "prior_20pct_and_5m_8pct",
+      "label": "+20% 이후 5분 +8%"
+    },
+    {
+      "key": "prior_10pct_and_5m_8pct",
+      "label": "+10% 이후 5분 +8%"
+    }
+  ],
+  "limitations": [
+    "급등 사례는 정규장 일봉에서 사후 선정한 455건이며 50% 도달 전에만 신호를 셉니다.",
+    "일반 대조군과 20~49% 상승 후 멈춘 대조군은 각 200건을 날짜·전일 종가·전일 거래대금으로 표본 매칭했습니다. 전체 시장 오탐률이나 매수 적중률이 아닙니다.",
+    "첫 관측 분봉에서 이미 50%에 도달한 사례는 이후 신호로 포착할 수 없습니다.",
+    "분봉 종가 신호와 연속된 다음 분봉은 실제 호가·체결 가능성을 보장하지 않습니다.",
+    "같은 30거래일에서 찾은 규칙은 별도 기간과 실시간 모의 투자로 검증해야 합니다."
+  ]
+}

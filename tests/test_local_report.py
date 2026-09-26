@@ -2,12 +2,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from surgepilot.local_report import evaluate_recall
+from surgepilot.local_report import evaluate_recall, first_signals
 from surgepilot.scan import connect_database, selection_summary
 from surgepilot.strategy import StrategyConfig
 
 
 class LocalReportTests(unittest.TestCase):
+    def test_sparse_bars_do_not_create_a_short_window_signal(self):
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        from zoneinfo import ZoneInfo
+        start = datetime(2026, 9, 22, 4, 0, tzinfo=ZoneInfo("America/New_York"))
+        bars = [{"time": start, "close": Decimal("10"), "volume": 1000},
+                {"time": start + timedelta(minutes=10), "close": Decimal("12"), "volume": 1000}]
+        found, _ = first_signals(bars, (5,), (Decimal("8"),), Decimal("1"), 0)
+        self.assertEqual(found, {})
+
     def test_premarket_signal_catches_open_gap_without_future_bars(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "research.sqlite")
