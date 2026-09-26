@@ -168,5 +168,17 @@ function showPattern(data) {
     `<table><thead><tr><th>관측 규칙</th><th>급등주 사전 신호</th><th>다음 봉 관측</th><th>50%까지 선행 중앙값</th><th>일반 대조군 신호</th><th>20~49% 대조군 신호</th></tr></thead><tbody>`+
     data.rules.map(({key,label})=>{const w=groups.winners.rules[key],o=groups.ordinary.rules[key],n=groups.near_miss.rules[key];return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(w.alerts)}/${escapeHtml(groups.winners.selected)}</td><td>${escapeHtml(w.next_minute_before_50pct)}</td><td>${escapeHtml(w.median_lead_minutes ?? '—')}분</td><td>${escapeHtml(o.alerts)}/${escapeHtml(groups.ordinary.selected)}</td><td>${escapeHtml(n.alerts)}/${escapeHtml(groups.near_miss.selected)}</td></tr>`;}).join('')+
     `</tbody></table><p class="study-note">전일 종가 +20%는 감시 후보일 뿐 매수 신호가 아닙니다. 20~49% 대조군은 의도적으로 어려운 사례를 모은 표본이며, 이 표로 전체 시장 오탐률이나 실거래 수익률을 계산할 수 없습니다.</p>`;
+  const tradeRules = ['prior_20pct','prior_20pct_and_5m_8pct','15m_20pct'];
+  const labels = Object.fromEntries(data.rules.map(({key,label})=>[key,label]));
+  $('study-pattern').insertAdjacentHTML('beforeend', `<h3>가격 외에 보이는 것 · 거래 참여</h3>`+
+    `<p class="study-note">첫 +20% 경보 시점까지의 거래량만 사용했습니다. 최근 5분 거래대금 10만 달러를 필수 조건으로 걸면 급등주 신호도 절반 이상 놓칩니다. 누적 비율은 전일 일봉의 대략적인 거래대금 대비입니다.</p>`+
+    `<table><thead><tr><th>사례</th><th>+20% 경보</th><th>최근 5분 거래대금 중앙값</th><th>5분 10만 달러 이상</th><th>전일 대비 누적 비율 중앙값</th><th>장전 경보</th></tr></thead><tbody>`+
+    ['winners','near_miss'].map(group=>{const f=groups[group].alert_features;return `<tr><td>${group==='winners'?'50% 급등':'20~49% 정체'}</td><td>${escapeHtml(f.alerts)}</td><td>${money(f.median_five_minute_turnover_usd)}</td><td>${escapeHtml(f.five_minute_turnover_ge_100k)}</td><td>${escapeHtml(f.median_cumulative_to_prior_turnover)}</td><td>${escapeHtml(f.premarket_alerts)}</td></tr>`;}).join('')+
+    `</tbody></table>`);
+  $('study-pattern').insertAdjacentHTML('beforeend', `<h3>포착 뒤 30분 · 매수 시점 검증</h3>`+
+    `<p class="study-note">첫 신호 다음 1분봉 시가 진입 가정. 급등주는 +50% 첫 도달 분봉보다 앞선 진입만 셉니다. +10% 목표와 -5% 손절 중 먼저 닿은 쪽을 표시합니다. 같은 분봉에서 둘 다 닿으면 순서를 알 수 없습니다. 수수료·호가 간격·체결 실패는 제외했습니다.</p>`+
+    `<table><thead><tr><th>신호</th><th>사례</th><th>다음 봉 진입</th><th>+10% 먼저</th><th>-5% 먼저</th><th>같은 봉</th><th>미도달</th><th>30분 최저 하락폭 중앙값</th></tr></thead><tbody>`+
+    tradeRules.flatMap(key=>['winners','near_miss'].map(group=>{const c=groups[group].continuation[key];return `<tr><td>${escapeHtml(labels[key])}</td><td>${group==='winners'?'50% 급등':'20~49% 정체'}</td><td>${escapeHtml(c.entries)}</td><td>${escapeHtml(c.target_first)}</td><td>${escapeHtml(c.stop_first)}</td><td>${escapeHtml(c.ambiguous)}</td><td>${escapeHtml(c.neither)}</td><td>${escapeHtml(c.median_maximum_adverse_pct)}%</td></tr>`;})).join('')+
+    `</tbody></table>`);
 }
 fetch('./pattern-summary.json').then((response)=>{if(!response.ok)throw Error('패턴 비교 없음');return response.json();}).then(showPattern).catch(()=>{$('study-pattern').textContent='패턴 비교 결과를 불러올 수 없습니다.';});
