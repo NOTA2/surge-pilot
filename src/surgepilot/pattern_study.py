@@ -32,6 +32,22 @@ ENTRY_METHODS = (
 )
 
 
+def _median(values, digits=2):
+    return round(statistics.median(values), digits) if values else None
+
+
+def _context_summary(rows):
+    return {"alerts": len(rows),
+            "median_recent_five_minute_rise_pct": _median([row[0] for row in rows]),
+            "median_last_bar_turnover_share_pct": _median([row[1] for row in rows]),
+            "median_recent_bar_count": _median([row[2] for row in rows], 1)}
+
+
+def _recent_bars(bars, index, minutes=5):
+    when = bars[index][0]
+    return [bar for bar in bars[:index + 1] if bar[0] > when - timedelta(minutes=minutes)]
+
+
 def _bars(database, symbol, date):
     result = []
     for stamp, high, close, volume in database.execute(
@@ -175,7 +191,9 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
                          for name, _ in ENTRY_METHODS}
         alert_features = {"five_minute_turnover_usd": [], "cumulative_to_prior_turnover": [],
                           "premarket_alerts": 0, "five_minute_turnover_ge_100k": 0}
+        watch_context = {"premarket": [], "regular": []}
         covered = catchable = below_one = first_bar_50pct = premarket_50pct = regular_open_gap = 0
+        extreme_open_5x = extreme_open_10x = extreme_open_5x_first_bar_50pct = 0
         for case in cases:
             symbol, date = case["symbol"], case["date"]
             prior = database.execute("SELECT high,low,close,volume FROM daily WHERE symbol=? AND date<? ORDER BY date DESC LIMIT 1",
@@ -188,6 +206,8 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
             below_one += prior_close < 1
             if group == "winners":
                 regular_open_gap += Decimal(daily[0]) >= prior_close * Decimal("1.5")
+                extreme_open_5x += Decimal(daily[0]) >= prior_close * 5
+                extreme_open_10x += Decimal(daily[0]) >= prior_close * 10
             bars = _bars(database, symbol, date)
             if not bars:
                 continue
@@ -198,6 +218,8 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
                 target = base * Decimal("1.5")
                 hit_index = next((i for i, bar in enumerate(bars) if bar[1] >= target), None)
                 first_bar_50pct += hit_index == 0
+                extreme_open_5x_first_bar_50pct += (hit_index == 0 and
+                                                     Decimal(daily[0]) >= prior_close * 5)
                 premarket_50pct += hit_index is not None and bars[hit_index][0].time() < time(9, 30)
                 catchable += hit_index is not None and hit_index > 0
                 if hit_index is None or hit_index == 0:
@@ -207,8 +229,8 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
             watch_index = first.get("prior_20pct")
             if watch_index is not None:
                 alert_at = bars[watch_index][0]
-                recent_turnover = sum(bar[2] * bar[3] for bar in bars[:watch_index + 1]
-                                      if bar[0] >= alert_at - timedelta(minutes=5))
+                recent_bars = _recent_bars(bars, watch_index)
+                recent_turnover = sum(bar[2] * bar[3] for bar in recent_bars)
                 cumulative_turnover = sum(bar[2] * bar[3] for bar in bars[:watch_index + 1])
                 prior_turnover = ((Decimal(prior[0]) + Decimal(prior[1]) + prior_close) / 3
                                   * Decimal(prior[3]))
@@ -218,6 +240,12 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
                         float(cumulative_turnover / prior_turnover))
                 alert_features["premarket_alerts"] += alert_at.time() < time(9, 30)
                 alert_features["five_minute_turnover_ge_100k"] += recent_turnover >= 100000
+                part = "premarket" if alert_at.time() < time(9, 30) else "regular"
+                current_turnover = bars[watch_index][2] * bars[watch_index][3]
+                watch_context[part].append((
+                    float((bars[watch_index][2] / min(bar[2] for bar in recent_bars) - 1) * 100),
+                    float(current_turnover / recent_turnover * 100) if recent_turnover > 0 else 0,
+                    len(recent_bars), date < midpoint))
             if any(name in first for name in CONTINUATION_RULES):
                 open_lows = _open_lows(database, symbol, date)
                 for name in CONTINUATION_RULES:
@@ -287,14 +315,23 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
         alert_features["median_five_minute_turnover_usd"] = round(statistics.median(turn), 2) if turn else None
         alert_features["median_cumulative_to_prior_turnover"] = (
             round(statistics.median(relative), 3) if relative else None)
+        context = {}
+        for part, rows in watch_context.items():
+            context[part] = {"all": _context_summary(rows),
+                             "three_or_more_bars": _context_summary([row for row in rows if row[2] >= 3]),
+                             "early_half": _context_summary([row for row in rows if row[2] >= 3 and row[3]]),
+                             "late_half": _context_summary([row for row in rows if row[2] >= 3 and not row[3]])}
         results[group] = {"selected": len(cases), "with_minute_bars": covered,
                           "catchable_after_first_bar": catchable,
                           "first_bar_already_50pct": first_bar_50pct,
+                          "extreme_open_gap_5x": extreme_open_5x,
+                          "extreme_open_gap_10x": extreme_open_10x,
+                          "extreme_open_gap_5x_first_bar_50pct": extreme_open_5x_first_bar_50pct,
                           "premarket_50pct": premarket_50pct,
                           "regular_open_gap_50pct": regular_open_gap,
                           "prior_close_below_1usd": below_one, "rules": counts,
                           "continuation": continuation, "entry_methods": entry_methods,
-                          "alert_features": alert_features}
+                          "alert_features": alert_features, "watch_context": context}
     database.close()
     return {"generated_at": datetime.now(NY).isoformat(),
             "period": [selection["sessions"][0], selection["sessions"][-1]],
@@ -305,10 +342,12 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
             "entry_method_labels": [{"key": name, "label": label} for name, label in ENTRY_METHODS],
             "entry_method_definition": "For winners, start with first +20% close before first +50% high; for controls, first +20% close. Alternative entry signal must occur within 20 clock minutes of watch. Entry assumes the next consecutive one-minute open. Outcomes are +10% high versus -5% low over 30 minutes after entry. Winner outcomes include entries after +50%; before_50pct_entries is reported separately. No fees, spread, slippage or real fill check.",
             "continuation_definition": "First close-confirmed alert, consecutive next-minute open strictly before +50% for winners; within 30 minutes, which is observed first: +10% high or -5% low? Same-minute both is ambiguous. Fees, spread and slippage excluded.",
+            "watch_context_definition": "At first +20% close before first +50% high for winners, or first +20% close for controls: up to five consecutive clock-minute timestamps including the alert minute. Rise compares alert close with minimum close in that observed window; last-bar turnover share is alert-bar close*volume divided by summed close*volume. Sparse-window bars are counted, not filled. Early/late halves split at half_split_at.",
             "limitations": [
                 "급등 사례는 정규장 일봉에서 사후 선정한 455건이며 50% 도달 전에만 신호를 셉니다.",
                 "일반 대조군과 20~49% 상승 후 멈춘 대조군은 각 200건을 날짜·전일 종가·전일 거래대금으로 표본 매칭했습니다. 전체 시장 오탐률이나 매수 적중률이 아닙니다.",
                 "첫 관측 분봉에서 이미 50%에 도달한 사례는 이후 신호로 포착할 수 없습니다.",
+                "전일 종가 대비 시가 5배 이상 급변한 사례는 액면병합 등 기업행위 가능성을 뜻하는 검토 대상입니다. 이 데이터만으로 기업행위를 확정하거나 자동 제외할 수 없습니다.",
                 "분봉 종가 신호와 연속된 다음 분봉은 실제 호가·체결 가능성을 보장하지 않습니다.",
                 "진입 후 +10% 목표와 -5% 손절의 선후는 분봉 고가·저가로만 계산했습니다. 같은 봉에서 둘 다 닿으면 순서를 알 수 없어 미확정으로 분류했습니다. 수수료와 호가 간격은 제외했습니다.",
                 "새 진입 방식은 같은 30거래일에서 탐색한 가설입니다. 대조군 200건은 전체 후보군이 아니며, 급등 전 진입 여부는 사후에만 알 수 있습니다.",
@@ -360,6 +399,30 @@ def render_html(result):
                       '<th>최근 5분 거래대금 중앙값</th><th>5분 10만 달러 이상</th>'
                       '<th>전일 대비 누적 비율 중앙값</th><th>장전 경보</th></tr></thead>'
                       f'<tbody>{volume_rows}</tbody></table></div></section>')
+    context_rows = ''.join(
+        f'<tr><td>{e("50% 급등" if group == "winners" else "20~49% 정체")}</td>'
+        f'<td>{e("장전" if part == "premarket" else "정규장")}</td>'
+        f'<td>{e(groups[group]["watch_context"][part]["all"]["alerts"])}</td>'
+        f'<td>{e(groups[group]["watch_context"][part]["three_or_more_bars"]["alerts"])}</td>'
+        f'<td>{e(groups[group]["watch_context"][part]["three_or_more_bars"]["median_recent_five_minute_rise_pct"])}%</td>'
+        f'<td>{e(groups[group]["watch_context"][part]["three_or_more_bars"]["median_last_bar_turnover_share_pct"])}%</td></tr>'
+        for part in ("premarket", "regular") for group in ("winners", "near_miss"))
+    regular_win = groups["winners"]["watch_context"]["regular"]
+    regular_near = groups["near_miss"]["watch_context"]["regular"]
+    context_section = ('<section><h2>첫 +20% 경보 당시의 공통 패턴</h2>'
+                       '<p>현재 봉을 포함한 최근 5개 시각의 분봉 중 실제로 관측된 분봉이 3개 이상일 때만 '
+                       '아래 속도와 마지막 봉 거래대금 비중을 비교합니다. 장전의 빈 분봉을 0으로 채우지 않습니다. '
+                       '급등주는 +50% 고가에 처음 도달하기 전 경보만 포함합니다.</p>'
+                       '<div class="table"><table><thead><tr><th>사례</th><th>시간대</th><th>+20% 경보</th>'
+                       '<th>최근 분봉 3개 이상</th><th>최근 구간 상승률 중앙값</th>'
+                       '<th>마지막 봉 거래대금 비중 중앙값</th></tr></thead>'
+                       f'<tbody>{context_rows}</tbody></table></div>'
+                       f'<p>정규장 상승률 중앙값은 앞 15거래일 급등 {e(regular_win["early_half"]["median_recent_five_minute_rise_pct"])}%'
+                       f'·정체 {e(regular_near["early_half"]["median_recent_five_minute_rise_pct"])}%, '
+                       f'뒤 15거래일 급등 {e(regular_win["late_half"]["median_recent_five_minute_rise_pct"])}%'
+                       f'·정체 {e(regular_near["late_half"]["median_recent_five_minute_rise_pct"])}%였습니다. '
+                       '가격 상승 속도에는 차이가 보이지만, 장전 분봉은 희소하고 전체 시장 후보를 '
+                       '수집하지 않아 매수 판정 기준으로 쓸 수 없습니다.</p></section>')
     continuation_section = (f'<section><h2>포착 뒤 30분 · 매수 시점 검증</h2>'
                             '<p>첫 신호 다음 1분봉 시가에 진입한다고 가정했습니다. 급등주는 +50% 첫 도달 분봉보다 '
                             '앞선 진입만 셉니다. +10% 목표와 -5% 손절 중 먼저 관측된 쪽을 표시하며, '
@@ -393,7 +456,14 @@ def render_html(result):
                      '<p>이 표본에서는 눌림 뒤 회복과 지연 돌파 모두 급등 전 진입 건수를 줄였습니다. '
                      '동일 후보의 즉시 진입 결과를 함께 비교하면 두 방식의 개선 근거가 없습니다. '
                      '따라서 자동 매수 규칙으로 채택하지 않습니다.</p></section>')
-    return f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SurgePilot · 포착 패턴 연구</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#09131d;color:#eaf4f3;font:15px system-ui,sans-serif}}main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:32px}}p,li{{color:#abc0c7;line-height:1.6}}section{{background:#11232e;border:1px solid #29434d;border-radius:13px;padding:22px;margin:18px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{background:#17313c;border-radius:9px;padding:15px}}.card strong{{display:block;font-size:26px;margin-top:8px}}.card span{{color:#abc0c7;font-size:12px}}.table{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}td,th{{padding:12px;border-bottom:1px solid #29434d;text-align:left}}th{{color:#abc0c7}}@media(max-width:700px){{.grid{{grid-template-columns:1fr}}}}</style></head><body><main><p>SURGEPILOT / OFFLINE PATTERN STUDY</p><h1>급등주 조기 포착 패턴</h1><p>{e(result["period"][0])} ~ {e(result["period"][1])} · 장전 04:00부터 관측 · 최저 관측 가격 $0.10</p><section><div class="grid"><div class="card"><span>50% 급등 사례</span><strong>{e(groups["winners"]["selected"])}</strong></div><div class="card"><span>분봉 관측 가능</span><strong>{e(groups["winners"]["catchable_after_first_bar"])}</strong></div><div class="card"><span>첫 분봉에서 이미 50%</span><strong>{e(groups["winners"]["first_bar_already_50pct"])}</strong></div></div><p>공통 양상: 전일 종가 1달러 미만 {e(groups["winners"]["prior_close_below_1usd"])}건 · 장전 50% 도달 {e(groups["winners"]["premarket_50pct"])}건 · 정규장 시작 시 이미 50% 상승 {e(groups["winners"]["regular_open_gap_50pct"])}건.</p></section><section><h2>신호별 비교</h2><p>급등주는 50% 도달 전 신호만 계산합니다. 일반 종목과 20~49% 상승 후 멈춘 종목은 같은 날짜·비슷한 가격과 전일 거래대금의 대조군입니다. 아래 대조군 수치는 표본 내 신호 건수입니다.</p><div class="table"><table><thead><tr><th>관측 규칙</th><th>급등주 사전 신호</th><th>다음 봉 관측</th><th>50%까지 선행 중앙값</th><th>일반 대조군</th><th>20~49% 대조군</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>{volume_section}{continuation_section}{entry_section}<section><h2>해석</h2><p>전일 종가 +20%는 급등주 {e(watch["alerts"])}건을 일찍 감지하지만, 20~49% 대조군도 {e(groups["near_miss"]["rules"]["prior_20pct"]["alerts"])}건 감지했습니다. 15분 이내 +20%로 좁히면 급등주 사전 신호가 {e(slow["alerts"])}건으로 줄고, 50%까지 선행 중앙값은 {e(slow["median_lead_minutes"])}분입니다. 첫 +20% 경보 뒤 다음 분봉 진입이 가능했던 급등 사례 {e(watch_trade["entries"])}건에서도 +10% 목표 선도달은 {e(watch_trade["target_first"])}건, -5% 손절 선도달은 {e(watch_trade["stop_first"])}건입니다. 따라서 포착 신호와 매수 시점을 따로 설계해야 합니다.</p><ul>{notes}</ul></section></main></body></html>'''
+    quality_section = (f'<section><h2>먼저 확인할 데이터 품질</h2><p>50% 급등으로 분류한 '
+                       f'{e(groups["winners"]["selected"])}건 중 전일 종가 대비 당일 시가가 5배 이상인 '
+                       f'사례가 {e(groups["winners"]["extreme_open_gap_5x"])}건, 10배 이상은 '
+                       f'{e(groups["winners"]["extreme_open_gap_10x"])}건입니다. 5배 이상 사례 중 '
+                       f'{e(groups["winners"]["extreme_open_gap_5x_first_bar_50pct"])}건은 첫 관측 분봉에서 '
+                       '+50%에 도달했습니다. 액면병합 등 기업행위 여부가 확인되지 않았으므로 '
+                       '이들을 모두 실제 급등 기회나 포착 실패로 해석하지 않습니다.</p></section>')
+    return f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SurgePilot · 포착 패턴 연구</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#09131d;color:#eaf4f3;font:15px system-ui,sans-serif}}main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:32px}}p,li{{color:#abc0c7;line-height:1.6}}section{{background:#11232e;border:1px solid #29434d;border-radius:13px;padding:22px;margin:18px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{background:#17313c;border-radius:9px;padding:15px}}.card strong{{display:block;font-size:26px;margin-top:8px}}.card span{{color:#abc0c7;font-size:12px}}.table{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}td,th{{padding:12px;border-bottom:1px solid #29434d;text-align:left}}th{{color:#abc0c7}}@media(max-width:700px){{.grid{{grid-template-columns:1fr}}}}</style></head><body><main><p>SURGEPILOT / OFFLINE PATTERN STUDY</p><h1>급등주 조기 포착 패턴</h1><p>{e(result["period"][0])} ~ {e(result["period"][1])} · 장전 04:00부터 관측 · 최저 관측 가격 $0.10</p><section><div class="grid"><div class="card"><span>50% 급등 사례</span><strong>{e(groups["winners"]["selected"])}</strong></div><div class="card"><span>분봉 관측 가능</span><strong>{e(groups["winners"]["catchable_after_first_bar"])}</strong></div><div class="card"><span>첫 분봉에서 이미 50%</span><strong>{e(groups["winners"]["first_bar_already_50pct"])}</strong></div></div><p>공통 양상: 전일 종가 1달러 미만 {e(groups["winners"]["prior_close_below_1usd"])}건 · 장전 50% 도달 {e(groups["winners"]["premarket_50pct"])}건 · 정규장 시작 시 이미 50% 상승 {e(groups["winners"]["regular_open_gap_50pct"])}건.</p></section>{quality_section}<section><h2>신호별 비교</h2><p>급등주는 50% 도달 전 신호만 계산합니다. 일반 종목과 20~49% 상승 후 멈춘 종목은 같은 날짜·비슷한 가격과 전일 거래대금의 대조군입니다. 아래 대조군 수치는 표본 내 신호 건수입니다.</p><div class="table"><table><thead><tr><th>관측 규칙</th><th>급등주 사전 신호</th><th>다음 봉 관측</th><th>50%까지 선행 중앙값</th><th>일반 대조군</th><th>20~49% 대조군</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>{context_section}{volume_section}{continuation_section}{entry_section}<section><h2>해석</h2><p>전일 종가 +20%는 급등주 {e(watch["alerts"])}건을 일찍 감지하지만, 20~49% 대조군도 {e(groups["near_miss"]["rules"]["prior_20pct"]["alerts"])}건 감지했습니다. 15분 이내 +20%로 좁히면 급등주 사전 신호가 {e(slow["alerts"])}건으로 줄고, 50%까지 선행 중앙값은 {e(slow["median_lead_minutes"])}분입니다. 첫 +20% 경보 뒤 다음 분봉 진입이 가능했던 급등 사례 {e(watch_trade["entries"])}건에서도 +10% 목표 선도달은 {e(watch_trade["target_first"])}건, -5% 손절 선도달은 {e(watch_trade["stop_first"])}건입니다. 따라서 포착 신호와 매수 시점을 따로 설계해야 합니다.</p><ul>{notes}</ul></section></main></body></html>'''
 
 
 def main():

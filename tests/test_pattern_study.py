@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from surgepilot.pattern_study import _continuation, _entry_signals, _signals
+from surgepilot.pattern_study import _continuation, _entry_signals, _recent_bars, _signals
 
 
 class PatternStudyTests(unittest.TestCase):
@@ -57,6 +57,12 @@ class PatternStudyTests(unittest.TestCase):
         bars = [(start + timedelta(minutes=minute), Decimal(price), Decimal(price), 100)
                 for minute, price in zip(stamps, prices)]
         self.assertEqual(_entry_signals(bars, 0)["pullback_recovery"], 4)
+
+    def test_recent_five_minute_window_contains_at_most_five_one_minute_bars(self):
+        start = datetime(2026, 9, 21, 9, 30, tzinfo=ZoneInfo("America/New_York"))
+        bars = [(start + timedelta(minutes=i), Decimal("10"), Decimal("10"), 100)
+                for i in range(6)]
+        self.assertEqual([bar[0].minute for bar in _recent_bars(bars, 5)], [31, 32, 33, 34, 35])
 
 
 if __name__ == "__main__":

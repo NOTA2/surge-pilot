@@ -165,11 +165,20 @@ function showPattern(data) {
   const groups = data.groups;
   $('study-pattern').innerHTML = `<h3>조기 포착 패턴 비교 · $${escapeHtml(data.minimum_signal_price_usd)} 이상</h3>`+
     `<p class="study-note">50% 급등 ${escapeHtml(groups.winners.selected)}건 중 전일 종가 $1 미만 ${escapeHtml(groups.winners.prior_close_below_1usd)}건, 장전 50% 도달 ${escapeHtml(groups.winners.premarket_50pct)}건, 정규장 시작 때 이미 +50% ${escapeHtml(groups.winners.regular_open_gap_50pct)}건입니다. 일반 대조군 ${escapeHtml(groups.ordinary.selected)}건과 20~49%에서 멈춘 대조군 ${escapeHtml(groups.near_miss.selected)}건을 날짜·전일 가격·전일 거래대금으로 맞춰 비교했습니다.</p>`+
+    `<p class="study-note"><strong>데이터 품질:</strong> 전일 종가 대비 당일 시가가 5배 이상인 급등 분류 ${escapeHtml(groups.winners.extreme_open_gap_5x ?? '—')}건, 10배 이상 ${escapeHtml(groups.winners.extreme_open_gap_10x ?? '—')}건입니다. 5배 이상 중 첫 관측 분봉에서 이미 +50%인 사례는 ${escapeHtml(groups.winners.extreme_open_gap_5x_first_bar_50pct ?? '—')}건입니다. 액면병합 등 기업행위 여부를 확인하기 전까지 실제 급등 기회나 포착 실패로 해석하지 않습니다.</p>`+
     `<table><thead><tr><th>관측 규칙</th><th>급등주 사전 신호</th><th>다음 봉 관측</th><th>50%까지 선행 중앙값</th><th>일반 대조군 신호</th><th>20~49% 대조군 신호</th></tr></thead><tbody>`+
     data.rules.map(({key,label})=>{const w=groups.winners.rules[key],o=groups.ordinary.rules[key],n=groups.near_miss.rules[key];return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(w.alerts)}/${escapeHtml(groups.winners.selected)}</td><td>${escapeHtml(w.next_minute_before_50pct)}</td><td>${escapeHtml(w.median_lead_minutes ?? '—')}분</td><td>${escapeHtml(o.alerts)}/${escapeHtml(groups.ordinary.selected)}</td><td>${escapeHtml(n.alerts)}/${escapeHtml(groups.near_miss.selected)}</td></tr>`;}).join('')+
     `</tbody></table><p class="study-note">전일 종가 +20%는 감시 후보일 뿐 매수 신호가 아닙니다. 20~49% 대조군은 의도적으로 어려운 사례를 모은 표본이며, 이 표로 전체 시장 오탐률이나 실거래 수익률을 계산할 수 없습니다.</p>`;
   const tradeRules = ['prior_20pct','prior_20pct_and_5m_8pct','15m_20pct'];
   const labels = Object.fromEntries(data.rules.map(({key,label})=>[key,label]));
+  if (groups.winners.watch_context) {
+    const wc = groups.winners.watch_context.regular, nc = groups.near_miss.watch_context.regular;
+    $('study-pattern').insertAdjacentHTML('beforeend', `<h3>첫 +20% 경보 당시의 공통 패턴</h3>`+
+      `<p class="study-note">급등주는 +50% 고가 도달 전의 첫 경보만 셉니다. 현재 봉을 포함한 최근 5개 시각의 분봉 중 3개 이상이 관측된 경우의 가격 속도와 마지막 봉 거래대금 비중입니다. 장전의 빈 분봉을 거래량 0으로 채우지 않았습니다.</p>`+
+      `<table><thead><tr><th>사례</th><th>시간대</th><th>+20% 경보</th><th>분봉 3개 이상</th><th>최근 구간 상승률 중앙값</th><th>마지막 봉 거래대금 비중 중앙값</th></tr></thead><tbody>`+
+      ['premarket','regular'].flatMap(part=>['winners','near_miss'].map(group=>{const c=groups[group].watch_context[part],q=c.three_or_more_bars;return `<tr><td>${group==='winners'?'50% 급등':'20~49% 정체'}</td><td>${part==='premarket'?'장전':'정규장'}</td><td>${escapeHtml(c.all.alerts)}</td><td>${escapeHtml(q.alerts)}</td><td>${rate(q.median_recent_five_minute_rise_pct)}</td><td>${rate(q.median_last_bar_turnover_share_pct)}</td></tr>`;})).join('')+
+      `</tbody></table><p class="study-note">정규장 상승률 중앙값: 앞 15거래일 급등 ${rate(wc.early_half.median_recent_five_minute_rise_pct)}·정체 ${rate(nc.early_half.median_recent_five_minute_rise_pct)}, 뒤 15거래일 급등 ${rate(wc.late_half.median_recent_five_minute_rise_pct)}·정체 ${rate(nc.late_half.median_recent_five_minute_rise_pct)}. 비교군은 전체 시장이 아니며 이 차이만으로 매수하면 안 됩니다.</p>`);
+  }
   $('study-pattern').insertAdjacentHTML('beforeend', `<h3>가격 외에 보이는 것 · 거래 참여</h3>`+
     `<p class="study-note">첫 +20% 경보 시점까지의 거래량만 사용했습니다. 최근 5분 거래대금 10만 달러를 필수 조건으로 걸면 급등주 신호도 절반 이상 놓칩니다. 누적 비율은 전일 일봉의 대략적인 거래대금 대비입니다.</p>`+
     `<table><thead><tr><th>사례</th><th>+20% 경보</th><th>최근 5분 거래대금 중앙값</th><th>5분 10만 달러 이상</th><th>전일 대비 누적 비율 중앙값</th><th>장전 경보</th></tr></thead><tbody>`+
