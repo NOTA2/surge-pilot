@@ -72,13 +72,18 @@ class TossClient:
     def _authenticate(self):
         encoded = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": self.client_id,
                                           "client_secret": self.client_secret}).encode()
-        req = urllib.request.Request(self.base_url + "/oauth2/token", data=encoded,
-                                     headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=20) as response:
-                payload = json.load(response)
-        except urllib.error.HTTPError as exc:
-            raise TossError(f"Toss authentication failed: HTTP {exc.code}") from exc
+        for attempt in range(3):
+            req = urllib.request.Request(self.base_url + "/oauth2/token", data=encoded,
+                                         headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=20) as response:
+                    payload = json.load(response)
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 and attempt < 2:
+                    time.sleep(min(float(exc.headers.get("Retry-After", "5")), 30))
+                    continue
+                raise TossError(f"Toss authentication failed: HTTP {exc.code}") from exc
         self._token = payload["access_token"]
         self._expires_at = time.time() + int(payload["expires_in"])
 

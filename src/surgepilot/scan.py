@@ -67,6 +67,9 @@ def connect_database(path: str) -> sqlite3.Connection:
       CREATE TABLE IF NOT EXISTS minute_log(symbol TEXT NOT NULL, date TEXT NOT NULL, status TEXT NOT NULL,
         bars INTEGER NOT NULL, first_at TEXT, last_at TEXT, updated_at TEXT NOT NULL,
         PRIMARY KEY(symbol,date));
+      CREATE TABLE IF NOT EXISTS premarket_log(symbol TEXT NOT NULL, date TEXT NOT NULL, status TEXT NOT NULL,
+        bars INTEGER NOT NULL, first_at TEXT, last_at TEXT, updated_at TEXT NOT NULL,
+        PRIMARY KEY(symbol,date));
     """)
     return connection
 
@@ -240,6 +243,70 @@ def scan_minutes(client: TossClient, db_path: str, phase: str = "winners", top_n
             if count % 50 == 0 or count == len(todo):
                 connection.commit()
                 print(f"minute pairs scanned {count}/{len(todo)}", flush=True)
+    connection.close()
+    return {"pairs": len(pairs), "database": db_path}
+
+
+def scan_premarket(client: TossClient, db_path: str, workers: int = 8,
+                   calls_per_second: float = 8):
+    """Add 04:00-09:29 ET candles for the known 50% regular-session cases."""
+    # Fail before starting the worker pool if token issuance is temporarily
+    # unavailable. Otherwise every queued worker can retry authentication.
+    try:
+        client._authenticate()
+    except TossError as error:
+        raise SystemExit(f"premarket collection stopped before requests: {error}; check Toss API allowlisted IP") from None
+    selection = selection_summary(db_path)
+    pairs = {(item["symbol"], item["date"]) for item in selection["winners"]}
+    connection = connect_database(db_path)
+    done = set(connection.execute("SELECT symbol,date FROM premarket_log WHERE status='ok'"))
+    todo = sorted(pairs - done)
+    print(f"premarket pairs={len(pairs)} remaining={len(todo)}", flush=True)
+    limiter = RateLimiter(calls_per_second)
+
+    def fetch(pair: tuple[str, str]):
+        symbol, date = pair
+        start = datetime.combine(datetime.fromisoformat(date).date(), wall_time(4, 0), NY)
+        end = datetime.combine(datetime.fromisoformat(date).date(), wall_time(9, 29), NY)
+        before = end.isoformat()
+        rows = []
+        seen = set()
+        try:
+            for _ in range(6):
+                limiter.wait()
+                page = client.candles(symbol, before)
+                candles = page.get("candles", [])
+                if not candles:
+                    break
+                for candle in candles:
+                    stamp = datetime.fromisoformat(candle["timestamp"]).astimezone(NY)
+                    if start <= stamp <= end and candle["timestamp"] not in seen:
+                        seen.add(candle["timestamp"])
+                        rows.append((symbol, date, candle["timestamp"], candle["openPrice"],
+                                     candle["highPrice"], candle["lowPrice"], candle["closePrice"], int(candle["volume"])))
+                oldest = datetime.fromisoformat(candles[-1]["timestamp"]).astimezone(NY)
+                next_before = page.get("nextBefore")
+                if oldest < start or not next_before or next_before == before:
+                    break
+                before = next_before
+            rows.sort(key=lambda row: row[2])
+            return pair, rows, "ok" if rows else "empty"
+        except (TossError, KeyError, ValueError) as error:
+            match = re.search(r"\b(\d{3})\b", str(error))
+            return pair, rows, f"error:{match.group(1) if match else type(error).__name__}"
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = [pool.submit(fetch, pair) for pair in todo]
+        for count, future in enumerate(as_completed(pending), 1):
+            (symbol, date), rows, status = future.result()
+            if rows:
+                connection.executemany("INSERT OR REPLACE INTO minute VALUES (?,?,?,?,?,?,?,?)", rows)
+            connection.execute("INSERT OR REPLACE INTO premarket_log VALUES (?,?,?,?,?,?,?)",
+                               (symbol, date, status, len(rows), rows[0][2] if rows else None,
+                                rows[-1][2] if rows else None, datetime.now(NY).isoformat()))
+            if count % 50 == 0 or count == len(todo):
+                connection.commit()
+                print(f"premarket scanned {count}/{len(todo)}", flush=True)
     connection.close()
     return {"pairs": len(pairs), "database": db_path}
 
@@ -564,6 +631,11 @@ def main():
     minute.add_argument("--top", type=int, default=100)
     minute.add_argument("--workers", type=int, default=8)
     minute.add_argument("--rate", type=float, default=8)
+    premarket = sub.add_parser("premarket")
+    premarket.add_argument("--credentials-file", required=True)
+    premarket.add_argument("--db", default="data/private/research.sqlite")
+    premarket.add_argument("--workers", type=int, default=8)
+    premarket.add_argument("--rate", type=float, default=8)
     export = sub.add_parser("export")
     export.add_argument("--db", default="data/private/research.sqlite")
     export.add_argument("--phase", choices=["winners", "top_prior"], required=True)
@@ -591,6 +663,8 @@ def main():
         scan_daily(client_from_file(args.credentials_file), args.db, args.days, args.workers, args.rate)
     elif args.command == "minute":
         scan_minutes(client_from_file(args.credentials_file), args.db, args.phase, args.top, args.workers, args.rate)
+    elif args.command == "premarket":
+        scan_premarket(client_from_file(args.credentials_file), args.db, args.workers, args.rate)
     elif args.command == "export":
         export_minutes(args.db, args.output, args.phase, args.top)
     elif args.command == "report":

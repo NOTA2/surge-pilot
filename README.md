@@ -16,6 +16,27 @@
 
 Python 3.11 이상이 필요합니다. 외부 Python 패키지는 필요하지 않습니다.
 
+### 저장된 데이터로 혼자 반복 실험하기
+
+저장된 `data/private/research.sqlite`만 읽으므로 **토스 API 키·네트워크·Codex 토큰 없이** 숫자를 바꿔 반복할 수 있습니다. 저장소 폴더에서 한 명령을 실행하면 `reports/private/latest.html`과 `latest.json`을 만들고 HTML을 브라우저로 엽니다.
+
+```bash
+./run-local.sh
+./run-local.sh --lookback 3 --rise 5 --trail 7 --stop 5
+```
+
+`N=--lookback` 분 동안 `M=--rise`% 상승하면 신호를 내고, 고점 대비 `X=--trail`% 또는 매수가 대비 `Y=--stop`% 하락하면 청산합니다. 기본값은 `5 / 8 / 7 / 5`입니다. 이 로컬 연구에서는 **거래대금 하한과 분봉 거래량 하한을 모두 0**으로 놓아 포착률을 먼저 봅니다. `--min-bar-volume`으로 분봉 거래량 하한을 별도로 다시 넣을 수 있습니다. 보고서는 여러 N/M 조합의 사전 신호·다음 분봉 매수 가능 건수와 선택한 규칙의 정규장 손익·상세 거래를 보여줍니다. 자동 브라우저 열기를 끄려면 `--no-open`을 붙이세요.
+
+한 번 실행할 때마다 `docs/recall-summary.json`에도 **종목명·거래 내역이 없는 집계**가 갱신됩니다. 이를 검토한 뒤 `main`에 push하면 GitHub Actions가 Pages의 포착률 표를 갱신합니다. 전체 사례 기준 포착률과 분봉상 평가 가능 사례 기준 포착률을 함께 보세요.
+
+장전 데이터를 한 번 추가 수집할 때만 API 키가 필요합니다. 이 단계가 끝나면 위 명령은 DB를 재사용합니다.
+
+```bash
+PYTHONPATH=src python3 -m surgepilot.scan premarket --credentials-file "$HOME/Downloads/토스 api key" --workers 2 --rate 2
+```
+
+장전 포착률은 기존 **정규장 50% 급등 사례**를 대상으로 합니다. 장전에만 50% 급등하고 정규장에는 해당하지 않은 종목은 아직 조사 대상에 없습니다. 또한 장전 신호는 포착률에 포함하지만 현재 손익 백테스트와 가상매매는 정규장 거래만 계산합니다. 장전 주문·체결 가능성과 호가 간격은 별도 검증이 필요합니다.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate

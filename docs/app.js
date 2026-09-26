@@ -127,7 +127,7 @@ function showStudy(data) {
   const cards = [
     ['전체 조사',`${Number(data.universe_stocks || 0).toLocaleString()}종목 · ${data.session_count}거래일`],
     ['50% 급등 사례',`${winner.events ?? '—'}건 · 시가 대비 ${winner.open_to_high_50pct ?? '—'}건`],
-    ['50% 도달 전 신호',winner.early_signals == null?'분봉 검증 중':`${winner.early_signals}/${winner.catchable_after_first_minute}건`],
+    ['기존 매매 규칙 사전 신호',winner.early_signals == null?'분봉 검증 중':`${winner.early_signals}/${winner.catchable_after_first_minute}건`],
     ['전일 거래대금 상위 100',top?.minute_covered == null ? `${top?.pairs ?? '—'} 종목·일자 검증 예정` : `${top.minute_covered}/${top.pairs} 종목·일자 확보`]
   ];
   $('study-summary').innerHTML=cards.map(([label,value])=>`<div class="study-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')+
@@ -143,3 +143,19 @@ function showStudy(data) {
   }
 }
 fetch('./study-summary.json').then((response)=>{if(!response.ok)throw Error('연구 요약 없음');return response.json();}).then(showStudy).catch(()=>{$('study-summary').textContent='실제 데이터 수집 및 검증을 진행 중입니다.';});
+
+function showRecall(data) {
+  if (!data || !Array.isArray(data.grid) || !data.coverage || !data.selected) throw Error('포착률 요약 형식이 아닙니다.');
+  const c = data.coverage, selected = data.selected, strategy = data.strategy;
+  const rows = [...data.grid].sort((a,b)=>b.all_event_recall_pct-a.all_event_recall_pct || a.lookback_minutes-b.lookback_minutes || a.rise_pct-b.rise_pct);
+  const warning = c.events_with_premarket_bars < c.raw_50pct_events ?
+    `<p class="study-recall-warning">장전 분봉 확보 ${escapeHtml(c.events_with_premarket_bars)}/${escapeHtml(c.raw_50pct_events)}건. 개장 전에 이미 50% 상승한 종목의 사전 포착률은 아직 평가되지 않았습니다.</p>` : '';
+  $('study-recall').innerHTML = `<h3>거래대금 조건 없는 포착률 실험 · ${escapeHtml(strategy.lookback_minutes)}분 / +${escapeHtml(strategy.rise_pct)}%</h3>`+
+    `<p class="study-note">확인된 사전 신호 ${escapeHtml(selected.signals_before_50pct)}/${escapeHtml(c.raw_50pct_events)}건 (${rate(selected.all_event_recall_pct)}). 저장된 첫 분봉 이후 50% 도달한 ${escapeHtml(c.catchable_after_first_bar)}건 기준으로는 ${rate(selected.recall_pct)}입니다. 다음 분봉 매수 가능 ${escapeHtml(selected.fills_before_50pct)}건. 장 시작 시 이미 +50%인 사례 ${escapeHtml(c.regular_open_gap_events)}건 중 개장 전 사전 신호 ${escapeHtml(selected.gap_signals_before_open)}건입니다.</p>`+
+    warning+
+    `<table><thead><tr><th>N</th><th>M</th><th>사전 신호</th><th>전체 사례 기준</th><th>관측 가능 기준</th><th>다음 봉 매수 가능</th></tr></thead><tbody>`+
+    rows.map((item)=>`<tr${item.lookback_minutes===strategy.lookback_minutes && item.rise_pct===strategy.rise_pct ? ' class="study-selected"':''}><td>${escapeHtml(item.lookback_minutes)}분</td><td>+${escapeHtml(item.rise_pct)}%</td><td>${escapeHtml(item.signals_before_50pct)}건</td><td>${rate(item.all_event_recall_pct)}</td><td>${rate(item.recall_pct)}</td><td>${escapeHtml(item.fills_before_50pct)}건</td></tr>`).join('')+
+    '</tbody></table><p class="study-note">같은 30거래일에서 조건을 비교한 탐색 결과입니다. 장전 체결 가능성과 별도 기간 성과는 아직 검증되지 않았습니다.</p>';
+}
+
+fetch('./recall-summary.json').then((response)=>{if(!response.ok)throw Error('포착률 요약 없음');return response.json();}).then(showRecall).catch(()=>{$('study-recall').textContent='포착률 요약을 불러올 수 없습니다.';});

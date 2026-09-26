@@ -47,7 +47,7 @@ def main():
         command.add_argument("--output", default="reports/private/result.json")
         if name != "paper":
             command.add_argument("--data", required=True, help="CSV file or directory")
-    sub.add_parser("demo").add_argument("--output", default="docs/report.json")
+    sub.add_parser("demo").add_argument("--output", default="reports/private/demo.json")
     sub.add_parser("demo-live").add_argument("--output", default="docs/live-report.json")
     collect = sub.add_parser("collect")
     sources = collect.add_mutually_exclusive_group(required=True)
