@@ -167,6 +167,8 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
                                 "before_50pct_target_first": 0,
                                 "before_50pct_stop_first": 0,
                                 "paired_immediate_entries": 0,
+                                "paired_method_target_first": 0,
+                                "paired_method_stop_first": 0,
                                 "paired_immediate_target_first": 0,
                                 "paired_immediate_stop_first": 0,
                                 "delays": [], "early_entries": 0, "late_entries": 0}
@@ -251,6 +253,8 @@ def analyze(db_path="data/private/research.sqlite", control_limit=200):
                         metric["before_50pct_" + key] += 1
                     if name != "immediate" and immediate_trade is not None:
                         metric["paired_immediate_entries"] += 1
+                        if key in ("target_first", "stop_first"):
+                            metric["paired_method_" + key] += 1
                         immediate_key = {"target": "target_first", "stop": "stop_first"}.get(
                             immediate_trade["outcome"], immediate_trade["outcome"])
                         if immediate_key in ("target_first", "stop_first"):
@@ -372,7 +376,7 @@ def render_html(result):
         f'<td>{e(groups[group]["entry_methods"][name]["median_delay_minutes"])}분</td>'
         f'<td>{e(groups[group]["entry_methods"][name]["target_first"])}</td>'
         f'<td>{e(groups[group]["entry_methods"][name]["stop_first"])}</td>'
-        f'<td>{e(str(groups[group]["entry_methods"][name]["paired_immediate_target_first"]) + " / " + str(groups[group]["entry_methods"][name]["paired_immediate_stop_first"]) if name != "immediate" else "—")}</td>'
+        f'<td>{e(str(groups[group]["entry_methods"][name]["paired_method_target_first"]) + " / " + str(groups[group]["entry_methods"][name]["paired_method_stop_first"]) + " ↔ " + str(groups[group]["entry_methods"][name]["paired_immediate_target_first"]) + " / " + str(groups[group]["entry_methods"][name]["paired_immediate_stop_first"]) if name != "immediate" else "—")}</td>'
         f'<td>{e(groups[group]["entry_methods"][name]["ambiguous"])}</td>'
         f'<td>{e(groups[group]["entry_methods"][name]["neither"])}</td></tr>'
         for name, label in ENTRY_METHODS for group in ("winners", "near_miss"))
@@ -384,7 +388,7 @@ def render_html(result):
                      '같은 분봉에서 목표·손절 모두 닿으면 순서를 알 수 없습니다.</p>'
                      '<div class="table"><table><thead><tr><th>진입 방식</th><th>사례</th><th>신호</th>'
                      '<th>다음 봉 진입</th><th>50% 전 진입</th><th>50% 전 목표 / 손절</th><th>감시 후 지연 중앙값</th>'
-                     '<th>+10% 먼저</th><th>-5% 먼저</th><th>동일 후보 즉시 진입 목표 / 손절</th><th>같은 봉</th><th>미도달</th></tr></thead>'
+                     '<th>+10% 먼저</th><th>-5% 먼저</th><th>동일 후보 대안 ↔ 즉시 목표 / 손절</th><th>같은 봉</th><th>미도달</th></tr></thead>'
                      f'<tbody>{entry_rows}</tbody></table></div>'
                      '<p>이 표본에서는 눌림 뒤 회복과 지연 돌파 모두 급등 전 진입 건수를 줄였습니다. '
                      '동일 후보의 즉시 진입 결과를 함께 비교하면 두 방식의 개선 근거가 없습니다. '
