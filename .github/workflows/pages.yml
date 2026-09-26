@@ -22,7 +22,7 @@ jobs:
       - name: Prepare public research site
         run: |
           mkdir -p site
-          cp docs/index.html docs/app.js docs/style.css docs/report.json docs/study-summary.json docs/recall-summary.json docs/.nojekyll site/
+          cp docs/index.html docs/app.js docs/style.css docs/report.json docs/study-summary.json docs/recall-summary.json docs/pattern-summary.json docs/.nojekyll site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
