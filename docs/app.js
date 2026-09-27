@@ -162,10 +162,11 @@ fetch('./recall-summary.json').then((response)=>{if(!response.ok)throw Error('�
 
 function showDiscovery(data) {
   if (!data?.rule || !data?.groups?.winners || !data?.groups?.near_miss) throw Error('발견 규칙 요약 형식이 아닙니다.');
+  const target=data.event?.rise_pct ?? 70;
   const w=data.groups.winners.all, n=data.groups.near_miss.all;
   const complete=w.full_day_fetched===w.candidates && n.full_day_fetched===n.candidates;
   const rowsFor=(groups)=>[['all','전체'],['first_half','앞 15일'],['second_half','뒤 15일']]
-    .flatMap(([period,suffix])=>[['winners','일봉 50% 급등'],['near_miss','일봉 20~49%'],['extreme_gap_5x','시가 5배 이상 · 급등']]
+    .flatMap(([period,suffix])=>[['winners',`일봉 ${target}% 급등`],['near_miss','일봉 20~69%'],['extreme_gap_5x','시가 5배 이상 · 급등']]
       .map(([group,label])=>{const m=groups[group][period];return `<tr><td>${escapeHtml(label)} · ${suffix}</td><td>${escapeHtml(m.candidates)}</td><td>${escapeHtml(m.full_day_fetched)}</td><td>${escapeHtml(m.signals)}</td><td>${group==='near_miss'?'—':escapeHtml(m.before_50pct)}</td><td>${group==='near_miss'?'—':escapeHtml(m.after_50pct)}</td><td>${escapeHtml(m.premarket_signals)}</td></tr>`;}));
   const rows=['<tr><th colspan="7">장전 포함 · 일봉 후보 표본</th></tr>',...rowsFor(data.groups),
     '<tr><th colspan="7">정규장 첫 신호만</th></tr>',...rowsFor(data.regular_groups)];
@@ -195,15 +196,15 @@ function showDiscovery(data) {
     return `<tr${rise==='dual'?' class="study-selected"':''}><td>${ruleLabel(rise)}</td><td>${escapeHtml(m?.before_50pct)}</td><td>${escapeHtml(m?.remaining_near_miss_signals)}</td><td>${escapeHtml(m?.after_50pct)}</td><td>${escapeHtml(m?.observed_alerts)}</td><td>${escapeHtml(m?.next_bar_before_50pct)}</td><td>${rate(m?.observed_pre50_alert_fraction_pct)}</td></tr>`;
   });
   $('study-discovery').innerHTML=`<h3>고정 발견 기준 · 주문 없음</h3>`+
-    `<p class="study-note">${escapeHtml(data.rule.label)} · 미국 동부 04:00~15:59 · 최저 $${escapeHtml(data.rule.minimum_price_usd)}. 완료된 1분봉 종가만 사용하고, 일봉의 +50% 결과는 사후 평가에만 씁니다.</p>`+
-    `<p class="study-note">${escapeHtml(data.universe_stocks)}종목의 일봉을 조사한 30거래일 후보 표본입니다. 장전 포함 첫 경보 ${escapeHtml(data.observed_alerts)}건(하루 평균 ${escapeHtml(data.average_alerts_per_session)}건) 중 일봉 급등주 사전 발견은 <strong>${escapeHtml(w.before_50pct)}건 (${rate(data.observed_pre50_alert_fraction_pct)})</strong>입니다. 첫 분봉 이후 +50% 도달한 ${escapeHtml(w.catchable_after_first_bar)}건 기준 포착률은 ${rate(data.catchable_recall_pct)}, 50%까지 선행 중앙값은 ${escapeHtml(w.median_lead_minutes)}분입니다. 정규장 첫 경보 ${escapeHtml(data.regular_observed_alerts)}건 중 일봉 급등주 사전 발견 비율은 ${rate(data.regular_pre50_alert_fraction_pct)}입니다. 장전에만 +20%였다가 정규장에서 내려온 종목은 일봉 후보 선정에서 빠질 수 있어 장전 포함 비율은 전체 시장 적중률이 아닙니다.${complete?'':' 분봉 수집도 미완료입니다.'}</p>`+
-    `<table><thead><tr><th>구분</th><th>일봉 후보</th><th>종일 분봉 수집</th><th>첫 신호</th><th>50% 전</th><th>50% 이후</th><th>장전 신호</th></tr></thead><tbody>${rows.join('')}</tbody></table>`+
+    `<p class="study-note">${escapeHtml(data.rule.label)} · 미국 동부 04:00~15:59 · 최저 $${escapeHtml(data.rule.minimum_price_usd)}. 완료된 1분봉 종가만 사용하고, 일봉의 +${target}% 최고가 결과는 사후 평가에만 씁니다.</p>`+
+    `<p class="study-note">${escapeHtml(data.universe_stocks)}종목의 일봉을 조사한 30거래일 후보 표본입니다. 장전 포함 첫 경보 ${escapeHtml(data.observed_alerts)}건(하루 평균 ${escapeHtml(data.average_alerts_per_session)}건) 중 일봉 급등주 사전 발견은 <strong>${escapeHtml(w.before_50pct)}건 (${rate(data.observed_pre50_alert_fraction_pct)})</strong>입니다. 첫 분봉 이후 +${target}% 도달한 ${escapeHtml(w.catchable_after_first_bar)}건 기준 포착률은 ${rate(data.catchable_recall_pct)}, +${target}%까지 선행 중앙값은 ${escapeHtml(w.median_lead_minutes)}분입니다. 정규장 첫 경보 ${escapeHtml(data.regular_observed_alerts)}건 중 일봉 급등주 사전 발견 비율은 ${rate(data.regular_pre50_alert_fraction_pct)}입니다. 장전에만 +20%였다가 정규장에서 내려온 종목은 일봉 후보 선정에서 빠질 수 있어 장전 포함 비율은 전체 시장 적중률이 아닙니다.${complete?'':' 분봉 수집도 미완료입니다.'}</p>`+
+    `<table><thead><tr><th>구분</th><th>일봉 후보</th><th>종일 분봉 수집</th><th>첫 신호</th><th>${target}% 전</th><th>${target}% 이후</th><th>장전 신호</th></tr></thead><tbody>${rows.join('')}</tbody></table>`+
     `<h3>단일 조건과 두 경로 비교</h3><p class="study-note">+8%는 넓은 관찰 신호입니다. 두 경로 후보는 전일 종가 +20%·5분 +10% 또는 전일 종가 +25%·5분 +6% 중 먼저 충족된 완료 분봉에 신호를 냅니다. 매수 조건은 아닙니다.</p>`+
-    `<table><thead><tr><th>기간</th><th>조건</th><th>일봉 50% 전</th><th>일봉 20~49%</th><th>일봉 50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th><th>선행 중앙값</th></tr></thead><tbody>${refinementRows.join('')}</tbody></table>`+
+    `<table><thead><tr><th>기간</th><th>조건</th><th>일봉 ${target}% 전</th><th>일봉 20~69%</th><th>일봉 ${target}% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th><th>선행 중앙값</th></tr></thead><tbody>${refinementRows.join('')}</tbody></table>`+
     `<p class="study-note">*일봉 후보 표본에서 관측한 비율이며 시장 전체 적중률이 아닙니다. 장전 전용 후보는 빠질 수 있습니다. 뒤 15일도 탐색에 사용했으므로 독립 검증이 아닙니다. 거래량 하한은 적용하지 않았습니다.</p>`+
-    `<h3>장전 +50% 포함 비교</h3><p class="study-note">일봉 20~49% 후보 중 ${escapeHtml(crossover?.cases)}건은 저장된 장전 분봉에서 전일 종가 대비 +50%에 도달했습니다. 이를 사건으로 다시 분류했습니다. 첫 +50%는 장전에는 전일 종가 기준, 정규장에는 전일 종가 또는 그날 시가 기준입니다. 두 경로에서만 사전 발견한 사건은 ${escapeHtml(paired?.dual_only)}건, +8% 관찰 신호에서만 사전 발견한 사건은 ${escapeHtml(paired?.watch_only)}건입니다.</p>`+
-    `<p class="study-note">두 경로 후보: 사전 발견 <strong>${escapeHtml(adjusted?.dual?.before_50pct)}/${escapeHtml(adjusted?.dual?.catchable_after_first_bar)}</strong>건, 경보 ${escapeHtml(adjusted?.dual?.observed_alerts)}건. +8% 관찰 신호: ${escapeHtml(adjusted?.['8']?.before_50pct)}/${escapeHtml(adjusted?.['8']?.catchable_after_first_bar)}건, 경보 ${escapeHtml(adjusted?.['8']?.observed_alerts)}건. 다음 1분봉이 +50% 전에 관측된 사례는 각각 ${escapeHtml(adjusted?.dual?.next_bar_before_50pct)}건과 ${escapeHtml(adjusted?.['8']?.next_bar_before_50pct)}건입니다.</p>`+
-    `<table><thead><tr><th>조건</th><th>50% 전</th><th>나머지 일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>다음 분봉도 50% 전</th><th>사전 발견 비율*</th></tr></thead><tbody>${adjustedRows.join('')}</tbody></table>`+
+    `<h3>장전 +${target}% 포함 비교</h3><p class="study-note">일봉 20~69% 후보 중 ${escapeHtml(crossover?.cases)}건은 저장된 장전 분봉에서 전일 종가 대비 +${target}%에 도달했습니다. 이를 사건으로 다시 분류했습니다. 첫 +${target}%는 장전에는 전일 종가 기준, 정규장에는 전일 종가 또는 그날 시가 기준입니다. 두 경로에서만 사전 발견한 사건은 ${escapeHtml(paired?.dual_only)}건, +8% 관찰 신호에서만 사전 발견한 사건은 ${escapeHtml(paired?.watch_only)}건입니다.</p>`+
+    `<p class="study-note">두 경로 후보: 사전 발견 <strong>${escapeHtml(adjusted?.dual?.before_50pct)}/${escapeHtml(adjusted?.dual?.catchable_after_first_bar)}</strong>건, 경보 ${escapeHtml(adjusted?.dual?.observed_alerts)}건. +8% 관찰 신호: ${escapeHtml(adjusted?.['8']?.before_50pct)}/${escapeHtml(adjusted?.['8']?.catchable_after_first_bar)}건, 경보 ${escapeHtml(adjusted?.['8']?.observed_alerts)}건. 다음 1분봉이 +${target}% 전에 관측된 사례는 각각 ${escapeHtml(adjusted?.dual?.next_bar_before_50pct)}건과 ${escapeHtml(adjusted?.['8']?.next_bar_before_50pct)}건입니다.</p>`+
+    `<table><thead><tr><th>조건</th><th>${target}% 전</th><th>나머지 일봉 20~69%</th><th>${target}% 이후</th><th>경보 합계</th><th>다음 분봉도 ${target}% 전</th><th>사전 발견 비율*</th></tr></thead><tbody>${adjustedRows.join('')}</tbody></table>`+
     `<p class="study-note">*저장된 일봉 후보와 장전 분봉 범위의 관측 비율입니다. 장전에서만 +20%에 도달한 다른 종목은 후보 수집에서 빠질 수 있어 시장 전체 적중률은 아닙니다.</p>`+
     `<p class="study-note">시가 5배 이상 행은 급등 행에 포함된 하위 집합입니다. 액면병합 등 기업행위 여부를 확인하기 전에는 성능 해석에 주의해야 합니다. 기존 매매 백테스트의 N/M/X/Y와 독립적인 발견 전용 규칙입니다.</p>`;
 }

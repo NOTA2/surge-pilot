@@ -8,14 +8,15 @@ from datetime import datetime, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .scan import RateLimiter, client_from_file, connect_database, selection_summary
+from .scan import DEFAULT_EVENT_RISE, RateLimiter, client_from_file, connect_database, selection_summary
 from .toss import TossError
 
 NY = ZoneInfo("America/New_York")
 
 
-def select_all_near_misses(db_path: str) -> list[dict]:
-    """Every daily +20% high that stays below both +50% event definitions."""
+def select_all_near_misses(db_path: str,
+                           event_rise: Decimal = DEFAULT_EVENT_RISE) -> list[dict]:
+    """Every daily +20% high that stays below both event definitions."""
     database = connect_database(db_path)
     sessions = [row[0] for row in database.execute("SELECT date FROM sessions ORDER BY ordinal")]
     days = {}
@@ -33,8 +34,8 @@ def select_all_near_misses(db_path: str) -> list[dict]:
                 continue
             prior_close = before[2]
             if (high >= prior_close * Decimal("1.2")
-                    and high < prior_close * Decimal("1.5")
-                    and high < opening * Decimal("1.5")):
+                    and high < prior_close * event_rise
+                    and high < opening * event_rise):
                 result.append({"symbol": symbol, "date": date, "matched_winner": ""})
     database.close()
     return sorted(result, key=lambda item: (item["date"], item["symbol"]))

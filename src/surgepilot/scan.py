@@ -23,6 +23,7 @@ from .strategy import StrategyConfig
 from .toss import TossClient, TossError
 
 NY = ZoneInfo("America/New_York")
+DEFAULT_EVENT_RISE = Decimal("1.5")
 
 
 def client_from_file(path: str) -> TossClient:
@@ -136,7 +137,13 @@ def scan_daily(client: TossClient, db_path: str, days: int = 30, workers: int = 
     return {"sessions": selected, "stocks": len(all_stocks), "database": db_path}
 
 
-def selection_summary(db_path: str, top_n: int = 100) -> dict:
+def selection_summary(db_path: str, top_n: int = 100,
+                      event_rise: Decimal = DEFAULT_EVENT_RISE) -> dict:
+    """Return daily event candidates and tradable prior-day rankings.
+
+    ``event_rise`` is an ex-post high-water-mark label. It never participates
+    in the discovery signal itself.
+    """
     connection = connect_database(db_path)
     sessions = [row[0] for row in connection.execute("SELECT date FROM sessions ORDER BY ordinal")]
     if not sessions:
@@ -168,7 +175,7 @@ def selection_summary(db_path: str, top_n: int = 100) -> dict:
             prior = prior_rows.get(symbol)
             if prior and Decimal(prior[5]) > 0:
                 prior_close = Decimal(prior[5])
-                if high / prior_close >= Decimal("1.5") or high / opening >= Decimal("1.5"):
+                if high / prior_close >= event_rise or high / opening >= event_rise:
                     winners.append({"date": date, "symbol": symbol,
                                     "prev_close_to_high_pct": round(float((high / prior_close - 1) * 100), 2),
                                     "open_to_high_pct": round(float((high / opening - 1) * 100), 2)})
@@ -181,7 +188,8 @@ def selection_summary(db_path: str, top_n: int = 100) -> dict:
     return {"sessions": sessions, "winners": winners, "top_prior": top_prior,
             "top_same_day": top_same_day,
             "turnover_method": "daily volume × (high + low + close) / 3; approximate",
-            "selection_rule": "prior-day top is known before entry; same-day top is diagnostic only"}
+            "selection_rule": "prior-day top is known before entry; same-day top is diagnostic only",
+            "event_rise_pct": float((event_rise - 1) * 100)}
 
 
 def scan_minutes(client: TossClient, db_path: str, phase: str = "winners", top_n: int = 100,

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 from surgepilot.scan import connect_database, selection_summary
@@ -22,6 +23,21 @@ class SelectionTests(unittest.TestCase):
             result = selection_summary(path, top_n=1)
             self.assertEqual(result["top_prior"][0]["symbols"], ["AAA"])
             self.assertEqual(result["top_same_day"][0]["symbols"], ["BBB"])
+
+    def test_event_threshold_uses_daily_high_not_close(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "research.sqlite")
+            db = connect_database(path)
+            db.execute("INSERT INTO sessions VALUES (?,?)", ("2026-09-22", 0))
+            db.executemany("INSERT INTO daily VALUES (?,?,?,?,?,?,?,?)", [
+                ("RUN", "2026-09-21", "NASDAQ", "10", "10", "10", "10", 100),
+                ("RUN", "2026-09-22", "NASDAQ", "10", "17.1", "10", "11", 100),
+            ])
+            db.commit()
+            db.close()
+            result = selection_summary(path, event_rise=Decimal("1.7"))
+            self.assertEqual([(item["symbol"], item["date"]) for item in result["winners"]],
+                             [("RUN", "2026-09-22")])
 
 
 if __name__ == "__main__":

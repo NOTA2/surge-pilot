@@ -53,11 +53,11 @@ class DiscoveryStudyTests(unittest.TestCase):
 
     def test_regular_open_target_cannot_be_used_in_premarket(self):
         bars = [self.bar(-330, 9.5, 9.5), self.bar(0, 9.5, 9.5)]
-        self.assertEqual(first_50pct_hit(bars, Decimal("10"), Decimal("6")), 1)
+        self.assertEqual(first_50pct_hit(bars, Decimal("10"), Decimal("5")), 1)
 
     def test_second_path_can_alert_without_baseline_alert(self):
         bars = [self.bar(-330, 11.8, 11.8), self.bar(-329, 12.6, 12.6),
-                self.bar(-328, 16, 12.6)]
+                self.bar(-328, 18, 12.6)]
         self.assertIsNone(first_signal(bars, Decimal("10")))
         self.assertEqual(first_refined_signal(bars, Decimal("10"), self.start.time(), "dual"), None)
         self.assertEqual(first_refined_signal(bars, Decimal("10"), bars[0][0].time(), "dual"), 1)
@@ -67,7 +67,7 @@ class DiscoveryStudyTests(unittest.TestCase):
             database.execute("INSERT INTO sessions VALUES (?,?)", ("2026-09-21", 0))
             database.executemany("INSERT INTO daily VALUES (?,?,?,?,?,?,?,?)", [
                 ("WIN", "2026-09-18", "NASDAQ", "10", "10", "10", "10", 100),
-                ("WIN", "2026-09-21", "NASDAQ", "10", "16", "10", "12", 100),
+                ("WIN", "2026-09-21", "NASDAQ", "10", "18", "10", "12", 100),
             ])
             for when, high, close in bars:
                 database.execute("INSERT INTO minute VALUES (?,?,?,?,?,?,?,?)",
@@ -87,8 +87,8 @@ class DiscoveryStudyTests(unittest.TestCase):
             database = connect_database(db_path)
             database.execute("INSERT INTO sessions VALUES (?,?)", ("2026-09-21", 0))
             rows = []
-            for symbol, opening, high in (("MISS", "10", "14"), ("WIN", "10", "16"),
-                                          ("OPENWIN", "7", "11"), ("FLAT", "10", "11")):
+            for symbol, opening, high in (("MISS", "10", "14"), ("WIN", "10", "18"),
+                                          ("OPENWIN", "7", "12"), ("FLAT", "10", "11")):
                 rows.extend(((symbol, "2026-09-18", "NASDAQ", "10", "10", "10", "10", 100),
                              (symbol, "2026-09-21", "NASDAQ", opening, high, opening,
                               opening, 100)))
@@ -104,8 +104,8 @@ class DiscoveryStudyTests(unittest.TestCase):
             db_path = str(Path(folder) / "research.sqlite")
             database = connect_database(db_path)
             database.execute("INSERT INTO sessions VALUES (?,?)", ("2026-09-21", 0))
-            for symbol, daily_high, minute_high in (("WIN", "16", "16"),
-                                                    ("CROSS", "14", "16"),
+            for symbol, daily_high, minute_high in (("WIN", "18", "18"),
+                                                    ("CROSS", "14", "18"),
                                                     ("MISS", "14", "14")):
                 database.execute("INSERT INTO daily VALUES (?,?,?,?,?,?,?,?)",
                                  (symbol, "2026-09-18", "NASDAQ", "10", "10", "10", "10", 100))
