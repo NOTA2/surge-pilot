@@ -21,21 +21,52 @@ MIN_PRICE = Decimal("0.10")
 PRIOR_RISE = Decimal("1.20")
 SHORT_RISE = Decimal("1.08")
 LOOKBACK = timedelta(minutes=5)
-REFINED_RISES = {"10": Decimal("1.10"), "12": Decimal("1.12")}
+REFINED_RULES = {
+    "10": (Decimal("1.20"), Decimal("1.10")),
+    "12": (Decimal("1.20"), Decimal("1.12")),
+    "25_6": (Decimal("1.25"), Decimal("1.06")),
+    "dual": None,
+}
+RULE_LABELS = {
+    "8": "전일 +20% · 5분 +8%",
+    "10": "전일 +20% · 5분 +10%",
+    "12": "전일 +20% · 5분 +12%",
+    "25_6": "전일 +25% · 5분 +6%",
+    "dual": "전일 +20%·5분 +10% 또는 전일 +25%·5분 +6%",
+}
 
 
-def first_signal(bars, prior_close, earliest=time(4), short_rise=SHORT_RISE):
-    """First close with +20% from prior close and +8% from an observed close in 5m."""
+def first_signal(bars, prior_close, earliest=time(4), short_rise=SHORT_RISE,
+                 prior_rise=PRIOR_RISE):
+    """First completed close above both prior-close and short-window thresholds."""
     recent = deque()
     for index, (when, _, close) in enumerate(bars):
         while recent and recent[0][0] < when - LOOKBACK:
             recent.popleft()
         if (when.time() >= earliest and close >= MIN_PRICE
-                and close >= prior_close * PRIOR_RISE and recent
+                and close >= prior_close * prior_rise and recent
                 and close >= min(item[1] for item in recent) * short_rise):
             return index
         recent.append((when, close))
     return None
+
+
+def first_refined_signal(bars, prior_close, earliest, rule):
+    """Evaluate each path independently, then use the first completed qualifying bar."""
+    if rule == "dual":
+        paths = (first_refined_signal(bars, prior_close, earliest, path)
+                 for path in ("10", "25_6"))
+        return min((index for index in paths if index is not None), default=None)
+    prior_rise, short_rise = REFINED_RULES[rule]
+    return first_signal(bars, prior_close, earliest, short_rise, prior_rise)
+
+
+def first_50pct_hit(bars, prior_close, regular_open):
+    """Prior-close target at any hour; regular-open target after the open exists."""
+    return next((index for index, (when, high, _) in enumerate(bars)
+                 if high >= prior_close * Decimal("1.5")
+                 or (when.time() >= time(9, 30)
+                     and high >= regular_open * Decimal("1.5"))), None)
 
 
 def _minute_bars(database, symbol, date):
@@ -61,7 +92,9 @@ def _counter():
     return {"candidates": 0, "full_day_fetched": 0, "with_minute_bars": 0,
             "signals": 0, "before_50pct": 0, "after_50pct": 0,
             "unverified_winner_signals": 0, "first_bar_50pct": 0,
+            "confirmed_50pct_in_minutes": 0,
             "catchable_after_first_bar": 0, "premarket_signals": 0,
+            "next_bar_before_50pct": 0, "lead_ge_5m": 0,
             "lead_minutes": []}
 
 
@@ -73,7 +106,30 @@ def _finish(counter):
 
 def _refinement_counter():
     return {"before_50pct": 0, "after_50pct": 0, "near_miss_signals": 0,
-            "premarket_signals": 0, "lead_minutes": []}
+            "premarket_signals": 0, "next_bar_before_50pct": 0,
+            "lead_ge_5m": 0, "lead_minutes": []}
+
+
+def _record_early(counter, bars, signal, hit):
+    lead = (bars[hit][0] - bars[signal][0]).total_seconds() / 60
+    counter["before_50pct"] += 1
+    counter["lead_minutes"].append(lead)
+    counter["lead_ge_5m"] += lead >= 5
+    counter["next_bar_before_50pct"] += (
+        signal + 1 < hit
+        and bars[signal + 1][0] - bars[signal][0] == timedelta(minutes=1))
+
+
+def _record_crossover(counter, bars, signal, hit):
+    if signal < hit:
+        lead = (bars[hit][0] - bars[signal][0]).total_seconds() / 60
+        counter["before_50pct"] += 1
+        counter["lead_ge_5m"] += lead >= 5
+        counter["next_bar_before_50pct"] += (
+            signal + 1 < hit
+            and bars[signal + 1][0] - bars[signal][0] == timedelta(minutes=1))
+    else:
+        counter["after_50pct"] += 1
 
 
 def _finish_refinement(counter):
@@ -104,15 +160,19 @@ def analyze(db_path="data/private/research.sqlite"):
     refinements = {
         scope: {rise: {period: _refinement_counter()
                        for period in ("all", "first_half", "second_half")}
-                for rise in REFINED_RISES}
+                for rise in REFINED_RULES}
         for scope in scopes
     }
     crossovers = {
-        period: {"cases": 0, "rules": {
-            rise: {"before_50pct": 0, "after_50pct": 0}
-            for rise in ("8", *REFINED_RISES)}}
+        period: {"cases": 0, "catchable_after_first_bar": 0, "rules": {
+            rise: {"before_50pct": 0, "after_50pct": 0,
+                   "next_bar_before_50pct": 0, "lead_ge_5m": 0}
+            for rise in ("8", *REFINED_RULES)}}
         for period in ("all", "first_half", "second_half")
     }
+    paired = {period: {"both": 0, "watch_only": 0, "dual_only": 0,
+                       "neither": 0}
+              for period in ("all", "first_half", "second_half")}
     for name, cases in (("winners", selection["winners"]), ("near_miss", near)):
         for case in cases:
             symbol, date = case["symbol"], case["date"]
@@ -148,43 +208,41 @@ def analyze(db_path="data/private/research.sqlite"):
             hit = None
             crossover_hit = None
             if name == "winners":
-                base = prior_close if high >= prior_close * Decimal("1.5") else opening
-                hit = next((index for index, bar in enumerate(bars)
-                            if bar[1] >= base * Decimal("1.5")), None)
+                hit = first_50pct_hit(bars, prior_close, opening)
                 for counter in counters:
+                    counter["confirmed_50pct_in_minutes"] += hit is not None
                     counter["first_bar_50pct"] += hit == 0
                     counter["catchable_after_first_bar"] += hit is not None and hit > 0
             else:
-                crossover_hit = next((index for index, bar in enumerate(bars)
-                                      if bar[1] >= prior_close * Decimal("1.5")
-                                      or bar[1] >= opening * Decimal("1.5")), None)
+                crossover_hit = first_50pct_hit(bars, prior_close, opening)
                 if crossover_hit is not None:
                     for key in keys:
                         crossovers[key]["cases"] += 1
+                        crossovers[key]["catchable_after_first_bar"] += crossover_hit > 0
+            scope_signals = {}
             for scope, earliest in (("all_hours", time(4)), ("regular_only", time(9, 30))):
                 signal = first_signal(bars, prior_close, earliest)
-                if signal is None:
-                    continue
-                for category in categories:
-                    for key in keys:
-                        counter = scopes[scope][category][key]
-                        counter["signals"] += 1
-                        counter["premarket_signals"] += bars[signal][0].time() < time(9, 30)
-                        if name == "winners":
-                            if hit is None:
-                                counter["unverified_winner_signals"] += 1
-                            elif signal < hit:
-                                counter["before_50pct"] += 1
-                                counter["lead_minutes"].append(
-                                    (bars[hit][0] - bars[signal][0]).total_seconds() / 60)
-                            else:
-                                counter["after_50pct"] += 1
-                if scope == "all_hours" and crossover_hit is not None:
-                    for key in keys:
-                        label = ("before_50pct" if signal < crossover_hit else "after_50pct")
-                        crossovers[key]["rules"]["8"][label] += 1
-                for rise, multiplier in REFINED_RISES.items():
-                    refined_signal = first_signal(bars, prior_close, earliest, multiplier)
+                scope_signals[scope] = {"8": signal}
+                if signal is not None:
+                    for category in categories:
+                        for key in keys:
+                            counter = scopes[scope][category][key]
+                            counter["signals"] += 1
+                            counter["premarket_signals"] += bars[signal][0].time() < time(9, 30)
+                            if name == "winners":
+                                if hit is None:
+                                    counter["unverified_winner_signals"] += 1
+                                elif signal < hit:
+                                    _record_early(counter, bars, signal, hit)
+                                else:
+                                    counter["after_50pct"] += 1
+                    if scope == "all_hours" and crossover_hit is not None:
+                        for key in keys:
+                            _record_crossover(crossovers[key]["rules"]["8"],
+                                              bars, signal, crossover_hit)
+                for rise in REFINED_RULES:
+                    refined_signal = first_refined_signal(bars, prior_close, earliest, rise)
+                    scope_signals[scope][rise] = refined_signal
                     if refined_signal is None:
                         continue
                     for key in keys:
@@ -193,16 +251,24 @@ def analyze(db_path="data/private/research.sqlite"):
                         if name == "near_miss":
                             refined["near_miss_signals"] += 1
                         elif hit is not None and refined_signal < hit:
-                            refined["before_50pct"] += 1
-                            refined["lead_minutes"].append(
-                                (bars[hit][0] - bars[refined_signal][0]).total_seconds() / 60)
+                            _record_early(refined, bars, refined_signal, hit)
                         else:
                             refined["after_50pct"] += 1
                     if scope == "all_hours" and crossover_hit is not None:
                         for key in keys:
-                            label = ("before_50pct" if refined_signal < crossover_hit
-                                     else "after_50pct")
-                            crossovers[key]["rules"][rise][label] += 1
+                            _record_crossover(crossovers[key]["rules"][rise],
+                                              bars, refined_signal, crossover_hit)
+            event_hit = hit if name == "winners" else crossover_hit
+            if event_hit is not None:
+                watch = scope_signals["all_hours"]["8"]
+                dual = scope_signals["all_hours"]["dual"]
+                watch_early = watch is not None and watch < event_hit
+                dual_early = dual is not None and dual < event_hit
+                field = ("both" if watch_early and dual_early else
+                         "watch_only" if watch_early else
+                         "dual_only" if dual_early else "neither")
+                for key in keys:
+                    paired[key][field] += 1
     database.close()
     for scope_groups in scopes.values():
         for subsets in scope_groups.values():
@@ -229,19 +295,33 @@ def analyze(db_path="data/private/research.sqlite"):
                 early = groups["winners"][period]["before_50pct"]
                 late = groups["winners"][period]["after_50pct"]
                 near_alerts = groups["near_miss"][period]["signals"]
+                next_bar = groups["winners"][period]["next_bar_before_50pct"]
+                lead_ge_5m = groups["winners"][period]["lead_ge_5m"]
             else:
                 refined = refinements["all_hours"][rise][period]
                 early, late, near_alerts = (refined["before_50pct"],
                                             refined["after_50pct"],
                                             refined["near_miss_signals"])
+                next_bar = refined["next_bar_before_50pct"]
+                lead_ge_5m = refined["lead_ge_5m"]
             crossed = crossovers[period]["rules"][rise]
             early += crossed["before_50pct"]
             late += crossed["after_50pct"]
+            next_bar += crossed["next_bar_before_50pct"]
+            lead_ge_5m += crossed["lead_ge_5m"]
             near_alerts -= crossed["before_50pct"] + crossed["after_50pct"]
             total = early + late + near_alerts
             adjusted[period][rise] = {
+                "observed_50pct_cases": (
+                    groups["winners"][period]["confirmed_50pct_in_minutes"]
+                    + crossovers[period]["cases"]),
+                "catchable_after_first_bar": (
+                    groups["winners"][period]["catchable_after_first_bar"]
+                    + crossovers[period]["catchable_after_first_bar"]),
                 "before_50pct": early, "after_50pct": late,
                 "remaining_near_miss_signals": near_alerts,
+                "next_bar_before_50pct": next_bar,
+                "lead_ge_5m": lead_ge_5m,
                 "observed_alerts": total,
                 "observed_pre50_alert_fraction_pct": round(early / total * 100, 2) if total else None,
             }
@@ -257,9 +337,11 @@ def analyze(db_path="data/private/research.sqlite"):
             "groups": groups,
             "regular_groups": scopes["regular_only"],
             "refinements": refinements,
+            "rule_labels": RULE_LABELS,
             "premarket_50pct_crossovers_from_daily_near_misses": crossovers,
             "all_hours_reclassified_observed": adjusted,
-            "refinement_note": "+8% is the broad watch signal. +10% is an exploratory stronger signal requiring the same prior-close +20% and observed 5-minute window; +12% shows the recall tradeoff. Each rule is evaluated at its own first qualifying completed bar. These thresholds were examined on this same 30-day sample; the second half is a stability check, not an untouched holdout.",
+            "paired_dual_vs_watch": paired,
+            "refinement_note": "Discovery-only exploration. Broad +20%/+8% watch versus a dual path: +20%/+10% or +25%/+6% in the previous observed five minutes. The two paths are evaluated separately and the earliest completed qualifying bar is used. The event is first minute high >=150% of prior close at any time, or >=150% of regular open after 09:30 ET. This sample was used to choose the rule; the half split is a stability check, not independent validation.",
             "observed_alerts": total_alerts,
             "regular_observed_alerts": regular_alerts,
             "regular_pre50_alert_fraction_pct": (
@@ -278,11 +360,12 @@ def analyze(db_path="data/private/research.sqlite"):
             "limitations": [
                 "+50% 여부와 첫 도달 시각은 평가에만 사용합니다. 발견 규칙에는 전일 종가와 그 시점까지 완료된 분봉 종가만 사용합니다.",
                 "일봉 50% 급등 정의는 전일 종가 또는 당일 시가 대비 고가입니다. 극단적 시가 갭은 기업행위 가능성이 있으므로 별도 표시하지만 검증 없이 자동 제외하지 않습니다.",
+                "첫 +50% 도달은 장전에는 전일 종가 기준으로, 정규장 개장 이후에는 전일 종가 또는 정규장 시가 기준으로 셉니다. 개장 전에는 아직 모르는 정규장 시가를 쓰지 않습니다.",
                 "분봉이 드문 장전에는 이전 5분 내 관측 종가가 없으면 신호가 나지 않습니다. 첫 관측 분봉에서 이미 50%인 사례도 사전 포착할 수 없습니다.",
                 "장전만 +20%를 넘고 정규장 일봉 고가가 +20% 미만인 종목은 후보 수집에서 빠질 수 있습니다. 장전 포함 경보 비율은 전체 시장 적중률이 아닙니다.",
                 "일봉 20~49% 후보에도 장전 분봉에서 +50%에 도달한 사례가 있습니다. 비교표의 일봉 분류와 별개로 장전 포함 재분류 값을 표시합니다.",
                 "같은 30거래일에서 선택한 탐색 규칙입니다. 별도 기간 검증과 실시간 호가 관측 전에는 성능을 확정할 수 없습니다.",
-                "+10% 강한 신호는 +8% 관찰 신호의 대체가 아니라 우선순위 표시입니다. 뒤 15일도 탐색에 사용했으므로 독립 검증으로 간주하지 않습니다.",
+                "두 경로 규칙은 탐색 후보입니다. 기존 +8% 관찰 신호와 나란히 비교하며, 뒤 15일도 탐색에 사용했으므로 독립 검증으로 간주하지 않습니다.",
                 "이 보고서는 발견 성능만 계산합니다. 매수 수익률, 체결 가능성, 주문량은 평가하지 않습니다.",
             ]}
 
@@ -321,24 +404,30 @@ def render_html(result):
         fraction = round(early / alerts * 100, 1) if alerts else None
         scope_label = "장전 포함" if scope == "all_hours" else "정규장"
         period_label = {"all": "전체", "first_half": "앞 15일", "second_half": "뒤 15일"}[period]
-        return (f'<tr><td>{e(scope_label)} · {e(period_label)}</td><td>5분 +{e(rise)}%</td>'
+        row_class = ' class="selected"' if rise == "dual" else ""
+        return (f'<tr{row_class}><td>{e(scope_label)} · {e(period_label)}</td>'
+                f'<td>{e(result["rule_labels"][rise])}</td>'
                 f'<td>{e(early)}</td><td>{e(near)}</td><td>{e(late)}</td>'
                 f'<td>{e(alerts)}</td><td>{e(fraction)}%</td><td>{e(lead)}분</td></tr>')
     refinement_rows = ''.join(
         refinement_row(scope, period, rise)
         for scope, periods in (("all_hours", ("all", "first_half", "second_half")),
                                ("regular_only", ("all",)))
-        for period in periods for rise in ("8", "10", "12"))
+        for period in periods for rise in RULE_LABELS)
     notes = ''.join(f'<li>{e(note)}</li>' for note in result["limitations"])
     win, near = groups["winners"]["all"], groups["near_miss"]["all"]
+    paired = result["paired_dual_vs_watch"]["all"]
     crossover_count = result["premarket_50pct_crossovers_from_daily_near_misses"]["all"]["cases"]
     adjusted_rows = ''.join(
-        f'<tr><td>5분 +{e(rise)}%</td><td>{e(values["before_50pct"])}</td>'
+        f'<tr{" class=selected" if rise == "dual" else ""}>'
+        f'<td>{e(result["rule_labels"][rise])}</td>'
+        f'<td>{e(values["before_50pct"])}</td>'
         f'<td>{e(values["remaining_near_miss_signals"])}</td>'
         f'<td>{e(values["after_50pct"])}</td><td>{e(values["observed_alerts"])}</td>'
+        f'<td>{e(values["next_bar_before_50pct"])}</td>'
         f'<td>{e(values["observed_pre50_alert_fraction_pct"])}%</td></tr>'
         for rise, values in result["all_hours_reclassified_observed"]["all"].items())
-    return f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SurgePilot · 발견 규칙 검증</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#09131d;color:#eaf4f3;font:15px system-ui,sans-serif}}main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:32px}}p,li{{color:#abc0c7;line-height:1.6}}section{{background:#11232e;border:1px solid #29434d;border-radius:13px;padding:22px;margin:18px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{background:#17313c;border-radius:9px;padding:15px}}.card strong{{display:block;font-size:26px;margin-top:8px}}.card span{{color:#abc0c7;font-size:12px}}.table{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}td,th{{padding:12px;border-bottom:1px solid #29434d;text-align:left}}th{{color:#abc0c7}}</style></head><body><main><p>SURGEPILOT / OFFLINE DISCOVERY STUDY</p><h1>급등주 발견 규칙 검증</h1><p>{e(result["period"][0])} ~ {e(result["period"][1])} · {e(result["rule"]["label"])} · 04:00~15:59 ET · 최저 $0.10</p><section><div class="grid"><div class="card"><span>50% 급등 전 첫 신호</span><strong>{e(win["before_50pct"])}/{e(win["candidates"])}</strong></div><div class="card"><span>일봉 20~49% 후보 신호</span><strong>{e(near["signals"])}/{e(near["candidates"])}</strong></div><div class="card"><span>일봉 50% 사전 발견 비율</span><strong>{e(result["observed_pre50_alert_fraction_pct"])}%</strong></div></div><p>{e(result["universe_stocks"])}종목 · 30거래일 · 첫 경보 {e(result["observed_alerts"])}건(하루 평균 {e(result["average_alerts_per_session"])}건). 첫 분봉 이후 +50%에 도달해 분봉상 사전 포착 가능한 {e(win["catchable_after_first_bar"])}건 중 {e(win["before_50pct"])}건을 발견했습니다({e(result["catchable_recall_pct"])}%). 발견에서 +50%까지 선행 중앙값은 {e(win["median_lead_minutes"])}분입니다. 일봉 기준 사전 급등 발견은 {e(win["before_50pct"])}/{e(result["observed_alerts"])}건입니다. 장전 분봉에서만 +50%에 도달한 일봉 후보는 아래에서 다시 분류합니다. 실거래 적중률은 아닙니다.</p></section><section><h2>후보 전체와 시간 구간별 검증</h2><div class="table"><table><thead><tr><th>구분</th><th>일봉 후보</th><th>종일 분봉 수집</th><th>첫 신호</th><th>50% 전</th><th>50% 이후</th><th>장전 신호</th></tr></thead><tbody>{rows}</tbody></table></div><p>급등주의 분봉 첫 +50% 도달 이전에 나온 신호만 성공으로 셉니다. 장중 고가가 먼저 +50%에 닿은 같은 분봉의 종가 신호는 늦은 신호입니다.</p></section><section><h2>강한 신호 조건 비교</h2><p>전일 종가 대비 +20%와 5분 관측창은 그대로 두고, 5분 상승폭만 +8% / +10% / +12%로 비교했습니다. +8%는 관찰, +10%는 강한 신호 후보입니다. 각 조건이 처음 충족된 분봉으로 계산합니다.</p><div class="table"><table><thead><tr><th>기간</th><th>조건</th><th>50% 전</th><th>일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th><th>선행 중앙값</th></tr></thead><tbody>{refinement_rows}</tbody></table></div><p>*이 일봉 후보 표본에서 관측한 비율입니다. 장전 전용 급등 후보는 누락될 수 있으므로 시장 전체 적중률이 아닙니다. 뒤 15일도 탐색에 사용했으므로 독립 검증은 아닙니다. 거래량 하한은 적용하지 않았습니다.</p></section><section><h2>장전 +50% 재분류</h2><p>일봉 20~49% 후보 중 {e(crossover_count)}건은 저장된 장전 분봉 고가에서 이미 +50%에 도달했습니다. 위 일봉 분류표에서는 정체 후보로 세지만, 아래 표에서는 실제 첫 +50% 이전과 이후 신호로 다시 분류했습니다.</p><div class="table"><table><thead><tr><th>조건</th><th>50% 전</th><th>나머지 일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th></tr></thead><tbody>{adjusted_rows}</tbody></table></div><p>*저장된 일봉 후보와 장전 분봉 범위의 관측 비율입니다. 장전에서만 +20%에 도달한 다른 종목은 후보 수집에서 빠질 수 있어 시장 전체 적중률은 아닙니다.</p></section><section><h2>해석 조건</h2><ul>{notes}</ul></section></main></body></html>'''
+    return f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SurgePilot · 발견 규칙 검증</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#09131d;color:#eaf4f3;font:15px system-ui,sans-serif}}main{{max-width:1100px;margin:auto;padding:32px 20px}}h1{{font-size:32px}}p,li{{color:#abc0c7;line-height:1.6}}section{{background:#11232e;border:1px solid #29434d;border-radius:13px;padding:22px;margin:18px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.card{{background:#17313c;border-radius:9px;padding:15px}}.card strong{{display:block;font-size:26px;margin-top:8px}}.card span{{color:#abc0c7;font-size:12px}}.table{{overflow:auto}}table{{border-collapse:collapse;width:100%;white-space:nowrap}}td,th{{padding:12px;border-bottom:1px solid #29434d;text-align:left}}th{{color:#abc0c7}}.selected{{background:#183b3a}}</style></head><body><main><p>SURGEPILOT / OFFLINE DISCOVERY STUDY</p><h1>급등주 발견 규칙 검증</h1><p>{e(result["period"][0])} ~ {e(result["period"][1])} · {e(result["rule"]["label"])} · 04:00~15:59 ET · 최저 $0.10</p><section><div class="grid"><div class="card"><span>50% 급등 전 첫 신호</span><strong>{e(win["before_50pct"])}/{e(win["candidates"])}</strong></div><div class="card"><span>일봉 20~49% 후보 신호</span><strong>{e(near["signals"])}/{e(near["candidates"])}</strong></div><div class="card"><span>일봉 50% 사전 발견 비율</span><strong>{e(result["observed_pre50_alert_fraction_pct"])}%</strong></div></div><p>{e(result["universe_stocks"])}종목 · 30거래일 · 첫 경보 {e(result["observed_alerts"])}건(하루 평균 {e(result["average_alerts_per_session"])}건). 첫 분봉 이후 +50%에 도달해 분봉상 사전 포착 가능한 {e(win["catchable_after_first_bar"])}건 중 {e(win["before_50pct"])}건을 발견했습니다({e(result["catchable_recall_pct"])}%). 발견에서 +50%까지 선행 중앙값은 {e(win["median_lead_minutes"])}분입니다. 일봉 기준 사전 급등 발견은 {e(win["before_50pct"])}/{e(result["observed_alerts"])}건입니다. 장전 분봉에서만 +50%에 도달한 일봉 후보는 아래에서 다시 분류합니다. 실거래 적중률은 아닙니다.</p></section><section><h2>후보 전체와 시간 구간별 검증</h2><div class="table"><table><thead><tr><th>구분</th><th>일봉 후보</th><th>종일 분봉 수집</th><th>첫 신호</th><th>50% 전</th><th>50% 이후</th><th>장전 신호</th></tr></thead><tbody>{rows}</tbody></table></div><p>급등주의 분봉 첫 +50% 도달 이전에 나온 신호만 성공으로 셉니다. 장중 고가가 먼저 +50%에 닿은 같은 분봉의 종가 신호는 늦은 신호입니다.</p></section><section><h2>단일 조건과 두 경로 비교</h2><p>+8%는 넓은 관찰 신호입니다. 두 경로 후보는 전일 종가 +20%·5분 +10% 또는 전일 종가 +25%·5분 +6% 중 먼저 충족된 완료 분봉에 신호를 냅니다. 매수 조건은 아닙니다.</p><div class="table"><table><thead><tr><th>기간</th><th>조건</th><th>50% 전</th><th>일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>사전 발견 비율*</th><th>선행 중앙값</th></tr></thead><tbody>{refinement_rows}</tbody></table></div><p>*이 일봉 후보 표본에서 관측한 비율입니다. 장전 전용 급등 후보는 누락될 수 있으므로 시장 전체 적중률이 아닙니다. 뒤 15일도 탐색에 사용했으므로 독립 검증은 아닙니다. 거래량 하한은 적용하지 않았습니다.</p></section><section><h2>장전 +50% 포함 비교</h2><p>일봉 20~49% 후보 중 {e(crossover_count)}건은 저장된 장전 분봉 고가에서 전일 종가 대비 +50%에 도달했습니다. 이를 사건으로 다시 분류했습니다. 첫 +50%는 장전에는 전일 종가 기준, 정규장에는 전일 종가 또는 그날 시가 기준입니다. 두 경로에서만 사전 발견한 사건은 {e(paired["dual_only"])}건, +8% 관찰 신호에서만 사전 발견한 사건은 {e(paired["watch_only"])}건입니다.</p><div class="table"><table><thead><tr><th>조건</th><th>50% 전</th><th>나머지 일봉 20~49%</th><th>50% 이후</th><th>경보 합계</th><th>다음 분봉도 50% 전</th><th>사전 발견 비율*</th></tr></thead><tbody>{adjusted_rows}</tbody></table></div><p>*저장된 일봉 후보와 장전 분봉 범위의 관측 비율입니다. 장전에서만 +20%에 도달한 다른 종목은 후보 수집에서 빠질 수 있어 시장 전체 적중률은 아닙니다.</p></section><section><h2>해석 조건</h2><ul>{notes}</ul></section></main></body></html>'''
 
 
 def main():

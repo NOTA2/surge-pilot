@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
-from surgepilot.discovery_study import analyze, first_signal
+from surgepilot.discovery_study import analyze, first_50pct_hit, first_refined_signal, first_signal
 from surgepilot.matched_controls import select_all_near_misses
 from surgepilot.scan import connect_database
 
@@ -50,6 +50,36 @@ class DiscoveryStudyTests(unittest.TestCase):
         self.assertEqual(first_signal(bars, Decimal("10")), 2)
         self.assertEqual(first_signal(bars, Decimal("10"), short_rise=Decimal("1.10")), 3)
         self.assertIsNone(first_signal(bars[:3], Decimal("10"), short_rise=Decimal("1.10")))
+
+    def test_regular_open_target_cannot_be_used_in_premarket(self):
+        bars = [self.bar(-330, 9.5, 9.5), self.bar(0, 9.5, 9.5)]
+        self.assertEqual(first_50pct_hit(bars, Decimal("10"), Decimal("6")), 1)
+
+    def test_second_path_can_alert_without_baseline_alert(self):
+        bars = [self.bar(-330, 11.8, 11.8), self.bar(-329, 12.6, 12.6),
+                self.bar(-328, 16, 12.6)]
+        self.assertIsNone(first_signal(bars, Decimal("10")))
+        self.assertEqual(first_refined_signal(bars, Decimal("10"), self.start.time(), "dual"), None)
+        self.assertEqual(first_refined_signal(bars, Decimal("10"), bars[0][0].time(), "dual"), 1)
+        with TemporaryDirectory() as folder:
+            db_path = str(Path(folder) / "research.sqlite")
+            database = connect_database(db_path)
+            database.execute("INSERT INTO sessions VALUES (?,?)", ("2026-09-21", 0))
+            database.executemany("INSERT INTO daily VALUES (?,?,?,?,?,?,?,?)", [
+                ("WIN", "2026-09-18", "NASDAQ", "10", "10", "10", "10", 100),
+                ("WIN", "2026-09-21", "NASDAQ", "10", "16", "10", "12", 100),
+            ])
+            for when, high, close in bars:
+                database.execute("INSERT INTO minute VALUES (?,?,?,?,?,?,?,?)",
+                                 ("WIN", "2026-09-21", when.isoformat(), str(close),
+                                  str(high), str(close), str(close), 100))
+            database.commit()
+            database.close()
+            result = analyze(db_path)
+            self.assertEqual(result["groups"]["winners"]["all"]["signals"], 0)
+            self.assertEqual(result["refinements"]["all_hours"]["dual"]["all"]
+                             ["before_50pct"], 1)
+            self.assertEqual(result["paired_dual_vs_watch"]["all"]["dual_only"], 1)
 
     def test_full_near_miss_universe_excludes_both_winner_definitions(self):
         with TemporaryDirectory() as folder:
