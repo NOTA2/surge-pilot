@@ -438,12 +438,15 @@ def main():
     parser.add_argument("--db", default="data/private/research.sqlite")
     parser.add_argument("--output", default="reports/private/discovery.html")
     parser.add_argument("--json-output", default="reports/private/discovery.json")
-    parser.add_argument("--public-summary", default="docs/discovery-summary.json")
+    parser.add_argument("--public-summary",
+                        help="optional aggregate JSON for a separately approved public export")
     args = parser.parse_args()
     result = analyze(args.db)
-    for name, content in ((args.output, render_html(result)),
-                          (args.json_output, json.dumps(result, ensure_ascii=False, indent=2)),
-                          (args.public_summary, json.dumps(result, ensure_ascii=False, indent=2))):
+    outputs = ((args.output, render_html(result)),
+               (args.json_output, json.dumps(result, ensure_ascii=False, indent=2)))
+    if args.public_summary:
+        outputs += ((args.public_summary, json.dumps(result, ensure_ascii=False, indent=2)),)
+    for name, content in outputs:
         target = Path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")

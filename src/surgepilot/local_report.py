@@ -276,7 +276,8 @@ def main():
     parser.add_argument("--slippage-bps", type=Decimal, default=Decimal("15"))
     parser.add_argument("--output", default="reports/private/latest.html")
     parser.add_argument("--json-output", default="reports/private/latest.json")
-    parser.add_argument("--public-summary", default="docs/recall-summary.json")
+    parser.add_argument("--public-summary",
+                        help="optional aggregate JSON for a separately approved public export")
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
     if args.min_bar_volume < 0 or args.min_price <= 0 or args.top < 1:
@@ -287,13 +288,14 @@ def main():
                      fee_bps=args.fee_bps, slippage_bps=args.slippage_bps)
     result = run_local(args.db, config, args.cash, args.top)
     html_path, json_path = Path(args.output), Path(args.json_output)
-    public_path = Path(args.public_summary)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    public_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.write_text(render_html(result), encoding="utf-8")
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    public_path.write_text(json.dumps(public_summary(result), ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.public_summary:
+        public_path = Path(args.public_summary)
+        public_path.parent.mkdir(parents=True, exist_ok=True)
+        public_path.write_text(json.dumps(public_summary(result), ensure_ascii=False, indent=2), encoding="utf-8")
     chosen = result["recall"]["selected"]
     print(f"confirmed_recall={chosen['signals_before_50pct']}/{result['recall']['coverage']['raw_50pct_events']} "
           f"({chosen['all_event_recall_pct']}%) evaluable_recall={chosen['recall_pct']}% "

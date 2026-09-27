@@ -1,7 +1,5 @@
-name: Deploy research dashboard to GitHub Pages
+name: Deploy research dashboard to GitHub Pages manually
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

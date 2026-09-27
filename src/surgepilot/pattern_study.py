@@ -472,12 +472,15 @@ def main():
     parser.add_argument("--control-limit", type=int, default=200)
     parser.add_argument("--output", default="reports/private/pattern.html")
     parser.add_argument("--json-output", default="reports/private/pattern.json")
-    parser.add_argument("--public-summary", default="docs/pattern-summary.json")
+    parser.add_argument("--public-summary",
+                        help="optional aggregate JSON for a separately approved public export")
     args = parser.parse_args()
     result = analyze(args.db, args.control_limit)
-    for path, content in ((args.output, render_html(result)),
-                          (args.json_output, json.dumps(result, ensure_ascii=False, indent=2)),
-                          (args.public_summary, json.dumps(result, ensure_ascii=False, indent=2))):
+    outputs = ((args.output, render_html(result)),
+               (args.json_output, json.dumps(result, ensure_ascii=False, indent=2)))
+    if args.public_summary:
+        outputs += ((args.public_summary, json.dumps(result, ensure_ascii=False, indent=2)),)
+    for path, content in outputs:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
